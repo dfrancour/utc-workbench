@@ -342,17 +342,26 @@ Each `List.Item`:
 
 ---
 
-# 10. MVP Checklist
+# 10. v0.0.1 Checklist
 
-* [ ] ISO8601 + epoch parsing
-* [ ] Multi-extract clipboard ingestion
-* [ ] Single timestamp interpretation UI
-* [ ] Timeline list view
-* [ ] Delta calculation
-* [ ] Full text preservation
-* [ ] LocalStorage persistence
-* [ ] Copy actions
-* [ ] Error handling (no timestamp found)
+Shipped:
+
+* [x] ISO8601 + epoch + log-format parsing
+* [x] Multi-extract paste ingestion (via search bar, unified single command)
+* [x] Single timestamp interpretation UI (Parsed section, live)
+* [x] Timeline list view (grouped by UTC date)
+* [x] Delta calculation (sequential + offset from selected row)
+* [x] Full text preservation (as editable Note)
+* [x] LocalStorage persistence
+* [x] Copy actions (ISO, Local, Unix, Note, Timeline text, JSON export)
+* [x] Error handling (no timestamp found, ambiguous timezones)
+* [x] Ambiguous timezone resolution (UTC/Local/picker)
+* [x] Labels and URLs per event
+* [x] Live UTC + local clock in nav bar
+* [x] Keyboard shortcuts with inline hints
+
+Architecture delta from plan: 3 commands collapsed into 1 unified "UTC Workbench" view.
+Paste into the search bar replaces the `Interpret Clipboard` no-view command.
 
 ---
 
