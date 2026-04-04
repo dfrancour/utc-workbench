@@ -17,6 +17,7 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.93.2",
+    "@raycast/utils": "^2.2.3",
     "luxon": "^3.6.1"
   },
   "devDependencies": {

@@ -6,7 +6,7 @@ describe('normalize', () => {
     const result = normalize(1775325751123, 'raw text');
     expect(result.iso).toBe('2026-04-04T18:02:31.123Z');
     expect(result.timestamp).toBe(1775325751123);
-    expect(result.rawText).toBe('raw text');
+    expect(result.note).toBe('raw text');
   });
 });
 
@@ -36,12 +36,32 @@ describe('reinterpret', () => {
     expect(result.ambiguous).toBe(false);
   });
 
-  it('preserves rawText across reinterpretation', () => {
+  it('preserves note across reinterpretation', () => {
     const original = {
       ...normalize(1775325751000, 'original log line'),
       ambiguous: true,
     };
     const result = reinterpret(original, 'America/Los_Angeles');
-    expect(result.rawText).toBe('original log line');
+    expect(result.note).toBe('original log line');
+  });
+
+  it('applies the correct offset across a DST boundary', () => {
+    // America/New_York: EST (UTC-5) in January, EDT (UTC-4) in July.
+    // The parser assumes UTC when no zone is present, so the epoch it produces
+    // for "2026-01-15 12:00:00" is 2026-01-15T12:00:00Z. Reinterpreting as
+    // New York should add 5h in winter, 4h in summer.
+    const winterUtc = Date.UTC(2026, 0, 15, 12, 0, 0);
+    const winter = reinterpret(
+      { ...normalize(winterUtc, 'w'), ambiguous: true },
+      'America/New_York'
+    );
+    expect(winter.iso).toBe('2026-01-15T17:00:00.000Z');
+
+    const summerUtc = Date.UTC(2026, 6, 15, 12, 0, 0);
+    const summer = reinterpret(
+      { ...normalize(summerUtc, 's'), ambiguous: true },
+      'America/New_York'
+    );
+    expect(summer.iso).toBe('2026-07-15T16:00:00.000Z');
   });
 });

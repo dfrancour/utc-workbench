@@ -3,35 +3,50 @@ import {
   ActionPanel,
   Alert,
   confirmAlert,
-  Form,
   Icon,
   List,
   showToast,
   Toast,
-  useNavigation,
 } from '@raycast/api';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { showFailureToast, useLocalStorage } from '@raycast/utils';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
-import { formatDelta, formatRelative, formatUnix } from './lib/format';
 import {
-  loadEvents,
-  pinEvent,
-  pinEvents,
+  extractDate,
+  extractTime,
+  formatDelta,
+  formatUnix,
+} from './lib/format';
+import {
+  STORAGE_KEY,
+  addEvent,
+  addEvents,
   removeEvent,
-  updateEventLabel,
-  updateEventUrl,
-  updateEventNote,
-  clearEvents,
+  sortEvents,
+  updateEvent,
 } from './lib/store';
 import type { Event, ParsedTimestamp } from './types';
+import { TextInputForm } from './components/TextInputForm';
+import { TimezoneForm } from './components/TimezoneForm';
+import { TimestampDetail } from './components/TimestampDetail';
 
 export default function UTCWorkbench() {
+  const {
+    value: storedEvents,
+    setValue: setStoredEvents,
+    removeValue: clearStoredEvents,
+    isLoading,
+  } = useLocalStorage<readonly Event[]>(STORAGE_KEY, []);
+
+  // The `useLocalStorage` store holds events in insertion order. We sort on
+  // read so the invariant ("list is timestamp-ordered") is enforced in a
+  // single place, independent of how writes happen.
+  const events = useMemo(() => sortEvents(storedEvents ?? []), [storedEvents]);
+
   const [query, setQuery] = useState('');
   const [parsed, setParsed] = useState<readonly ParsedTimestamp[]>([]);
-  const [events, setEvents] = useState<readonly Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(() => DateTime.now().toUTC());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,17 +64,6 @@ export default function UTCWorkbench() {
   const localTime = now.toLocal().toFormat('HH:mm:ss');
   const localZone = now.toLocal().toFormat('ZZZZ');
   const navTitle = `UTC ${utcTime}  ·  ${localZone} ${localTime}`;
-
-  const refresh = useCallback(async () => {
-    const loaded = await loadEvents();
-    setEvents(loaded);
-  }, []);
-
-  useEffect(() => {
-    void refresh().then(() => {
-      setIsLoading(false);
-    });
-  }, [refresh]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -86,7 +90,8 @@ export default function UTCWorkbench() {
     return map;
   }, [parsed, events]);
 
-  const selectedTimestamp = selectedId !== null ? (timestampById.get(selectedId) ?? null) : null;
+  const selectedTimestamp =
+    selectedId !== null ? (timestampById.get(selectedId) ?? null) : null;
 
   function offsetFrom(timestamp: number, itemId: string): string | null {
     if (selectedTimestamp === null) return null;
@@ -94,6 +99,9 @@ export default function UTCWorkbench() {
     return formatDelta(timestamp - selectedTimestamp);
   }
 
+  // Precondition: `events` is sorted by timestamp ascending (sortEvents above
+  // guarantees this). Because of that, entries with the same UTC date are
+  // contiguous, which lets us group in a single pass.
   const eventsByDate = useMemo(() => {
     const groups: { date: string; events: Event[] }[] = [];
     let currentDate = '';
@@ -119,39 +127,57 @@ export default function UTCWorkbench() {
   }, [events]);
 
   async function handlePin(result: ParsedTimestamp, label?: string) {
-    await pinEvent(result, label);
-    await refresh();
-    await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
+    try {
+      await setStoredEvents(addEvent(events, result, trimOrNull(label)));
+      await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to pin event' });
+    }
   }
 
   async function handlePinAll(label?: string) {
     if (parsed.length === 0) return;
-    await pinEvents(parsed, label);
-    await refresh();
-    await showToast({
-      style: Toast.Style.Success,
-      title: `Pinned ${parsed.length.toString()} timestamp${parsed.length === 1 ? '' : 's'}`,
-    });
+    try {
+      await setStoredEvents(addEvents(events, parsed, trimOrNull(label)));
+      await showToast({
+        style: Toast.Style.Success,
+        title: `Pinned ${parsed.length.toString()} timestamp${parsed.length === 1 ? '' : 's'}`,
+      });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to pin events' });
+    }
   }
 
   async function handleRemove(id: string) {
-    await removeEvent(id);
-    await refresh();
+    try {
+      await setStoredEvents(removeEvent(events, id));
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to delete event' });
+    }
   }
 
   async function handleRelabel(id: string, label: string | null) {
-    await updateEventLabel(id, label);
-    await refresh();
+    try {
+      await setStoredEvents(updateEvent(events, id, { label }));
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to update label' });
+    }
   }
 
   async function handleSetUrl(id: string, url: string | null) {
-    await updateEventUrl(id, url);
-    await refresh();
+    try {
+      await setStoredEvents(updateEvent(events, id, { url }));
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to update URL' });
+    }
   }
 
   async function handleSetNote(id: string, note: string) {
-    await updateEventNote(id, note);
-    await refresh();
+    try {
+      await setStoredEvents(updateEvent(events, id, { note }));
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to update note' });
+    }
   }
 
   async function handleClear() {
@@ -161,9 +187,12 @@ export default function UTCWorkbench() {
       primaryAction: { title: 'Delete All', style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) return;
-    await clearEvents();
-    setEvents([]);
-    await showToast({ style: Toast.Style.Success, title: 'All events deleted' });
+    try {
+      await clearStoredEvents();
+      await showToast({ style: Toast.Style.Success, title: 'All events deleted' });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to clear events' });
+    }
   }
 
   function copyTimeline() {
@@ -172,7 +201,7 @@ export default function UTCWorkbench() {
         const prev = events[i - 1];
         const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '---';
         const label = e.label ? `[${e.label}] ` : '';
-        return `${e.iso} | ${e.local} | ${delta} | ${label}${e.rawText}`;
+        return `${e.iso} | ${e.local} | ${delta} | ${label}${e.note}`;
       })
       .join('\n');
   }
@@ -183,7 +212,7 @@ export default function UTCWorkbench() {
         iso: e.iso,
         label: e.label,
         url: e.url,
-        note: e.rawText || null,
+        note: e.note || null,
       })),
       null,
       2
@@ -218,7 +247,7 @@ export default function UTCWorkbench() {
                 icon={r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass}
                 title={extractTime(r.iso)}
                 {...(subtitle !== null ? { subtitle } : {})}
-                detail={<TimestampDetail iso={r.iso} local={r.local} timestamp={r.timestamp} rawText={r.rawText} label={null} url={null} offset={offset} kind="parsed" ambiguous={r.ambiguous} />}
+                detail={<TimestampDetail kind="parsed" parsed={r} offset={offset} />}
                 actions={
                   <ActionPanel>
                     {r.ambiguous ? (
@@ -244,10 +273,10 @@ export default function UTCWorkbench() {
                           shortcut={{ modifiers: ['cmd', 'shift'], key: 't' }}
                           target={
                             <TimezoneForm
+                              title={`Timezone for ${extractTime(r.iso)}`}
                               onSubmit={(zone) => {
                                 resolveTimezone(i, zone);
                               }}
-                              title={`Timezone for ${extractTime(r.iso)}`}
                             />
                           }
                         />
@@ -266,9 +295,11 @@ export default function UTCWorkbench() {
                         icon={Icon.Tag}
                         shortcut={{ modifiers: ['cmd'], key: 'l' }}
                         target={
-                          <LabelForm
-                            onSubmit={(label) => handlePin(r, label)}
+                          <TextInputForm
                             title={`Label for ${extractTime(r.iso)}`}
+                            fieldTitle="Label"
+                            placeholder="e.g., api-gw, postgres, auth-service"
+                            onSubmit={(label) => handlePin(r, label)}
                           />
                         }
                       />
@@ -287,9 +318,11 @@ export default function UTCWorkbench() {
                             icon={Icon.Tag}
                             shortcut={{ modifiers: ['cmd', 'shift'], key: 'l' }}
                             target={
-                              <LabelForm
-                                onSubmit={(label) => handlePinAll(label)}
+                              <TextInputForm
                                 title={`Label for ${parsed.length.toString()} timestamps`}
+                                fieldTitle="Label"
+                                placeholder="e.g., api-gw, postgres, auth-service"
+                                onSubmit={(label) => handlePinAll(label)}
                               />
                             }
                           />
@@ -310,7 +343,11 @@ export default function UTCWorkbench() {
       ) : null}
 
       {eventsByDate.map((group) => (
-        <List.Section key={group.date} title={group.date} subtitle={`${group.events.length.toString()} event${group.events.length === 1 ? '' : 's'}`}>
+        <List.Section
+          key={group.date}
+          title={group.date}
+          subtitle={`${group.events.length.toString()} event${group.events.length === 1 ? '' : 's'}`}
+        >
           {group.events.map((event) => {
             const itemId = `event-${event.id}`;
             const offset = offsetFrom(event.timestamp, itemId);
@@ -322,7 +359,7 @@ export default function UTCWorkbench() {
                 icon={event.label ? Icon.Tag : Icon.Clock}
                 title={extractTime(event.iso)}
                 {...(subtitle !== null ? { subtitle } : {})}
-                detail={<TimestampDetail iso={event.iso} local={event.local} timestamp={event.timestamp} rawText={event.rawText} label={event.label} url={event.url} offset={offset} kind="event" />}
+                detail={<TimestampDetail kind="event" event={event} offset={offset} />}
                 actions={
                   <ActionPanel>
                     <ActionPanel.Section title="Event">
@@ -331,10 +368,12 @@ export default function UTCWorkbench() {
                         icon={Icon.Tag}
                         shortcut={{ modifiers: ['cmd'], key: 'l' }}
                         target={
-                          <LabelForm
-                            initialLabel={event.label ?? ''}
-                            onSubmit={(label) => handleRelabel(event.id, label || null)}
+                          <TextInputForm
                             title={`Label for ${extractTime(event.iso)}`}
+                            fieldTitle="Label"
+                            placeholder="e.g., api-gw, postgres, auth-service"
+                            initialValue={event.label ?? ''}
+                            onSubmit={(label) => handleRelabel(event.id, trimOrNull(label))}
                           />
                         }
                       />
@@ -343,10 +382,12 @@ export default function UTCWorkbench() {
                         icon={Icon.Link}
                         shortcut={{ modifiers: ['cmd'], key: 'u' }}
                         target={
-                          <UrlForm
-                            initialUrl={event.url ?? ''}
-                            onSubmit={(url) => handleSetUrl(event.id, url || null)}
+                          <TextInputForm
                             title={`URL for ${extractTime(event.iso)}`}
+                            fieldTitle="URL"
+                            placeholder="e.g., https://grafana.internal/d/abc123"
+                            initialValue={event.url ?? ''}
+                            onSubmit={(url) => handleSetUrl(event.id, trimOrNull(url))}
                           />
                         }
                       />
@@ -362,10 +403,13 @@ export default function UTCWorkbench() {
                         icon={Icon.Pencil}
                         shortcut={{ modifiers: ['cmd'], key: 'n' }}
                         target={
-                          <NoteForm
-                            initialNote={event.rawText}
-                            onSubmit={(note) => handleSetNote(event.id, note)}
+                          <TextInputForm
                             title={`Note for ${extractTime(event.iso)}`}
+                            fieldTitle="Note"
+                            placeholder="Log line, annotation, or any context"
+                            initialValue={event.note}
+                            multiline
+                            onSubmit={(note) => handleSetNote(event.id, note)}
                           />
                         }
                       />
@@ -390,7 +434,7 @@ export default function UTCWorkbench() {
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
                       <Action.CopyToClipboard title="Copy ISO" content={event.iso} />
-                      <Action.CopyToClipboard title="Copy Note" content={event.rawText} />
+                      <Action.CopyToClipboard title="Copy Note" content={event.note} />
                       <Action.CopyToClipboard
                         title="Copy Timeline"
                         content={copyTimeline()}
@@ -413,253 +457,8 @@ export default function UTCWorkbench() {
   );
 }
 
-function LabelForm({
-  initialLabel,
-  onSubmit,
-  title,
-}: {
-  readonly initialLabel?: string;
-  readonly onSubmit: (label: string) => Promise<void> | void;
-  readonly title: string;
-}) {
-  const { pop } = useNavigation();
-
-  return (
-    <Form
-      navigationTitle={title}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Save"
-            icon={Icon.Check}
-            onSubmit={async (values: { label: string }) => {
-              await onSubmit(values.label);
-              pop();
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TextField
-        id="label"
-        title="Label"
-        placeholder="e.g., api-gw, postgres, auth-service"
-        defaultValue={initialLabel ?? ''}
-      />
-    </Form>
-  );
+/** Trim a form-input string; return null for empty/whitespace-only values. */
+function trimOrNull(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
-
-function UrlForm({
-  initialUrl,
-  onSubmit,
-  title,
-}: {
-  readonly initialUrl?: string;
-  readonly onSubmit: (url: string) => Promise<void> | void;
-  readonly title: string;
-}) {
-  const { pop } = useNavigation();
-
-  return (
-    <Form
-      navigationTitle={title}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Save"
-            icon={Icon.Check}
-            onSubmit={async (values: { url: string }) => {
-              await onSubmit(values.url);
-              pop();
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TextField
-        id="url"
-        title="URL"
-        placeholder="e.g., https://grafana.internal/d/abc123"
-        defaultValue={initialUrl ?? ''}
-      />
-    </Form>
-  );
-}
-
-function NoteForm({
-  initialNote,
-  onSubmit,
-  title,
-}: {
-  readonly initialNote?: string;
-  readonly onSubmit: (note: string) => Promise<void> | void;
-  readonly title: string;
-}) {
-  const { pop } = useNavigation();
-
-  return (
-    <Form
-      navigationTitle={title}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Save"
-            icon={Icon.Check}
-            onSubmit={async (values: { note: string }) => {
-              await onSubmit(values.note);
-              pop();
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TextArea
-        id="note"
-        title="Note"
-        placeholder="Log line, annotation, or any context"
-        defaultValue={initialNote ?? ''}
-      />
-    </Form>
-  );
-}
-
-const COMMON_TIMEZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Toronto',
-  'America/Sao_Paulo',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Paris',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Kolkata',
-  'Asia/Singapore',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-] as const;
-
-function TimezoneForm({
-  onSubmit,
-  title,
-}: {
-  readonly onSubmit: (zone: string) => void;
-  readonly title: string;
-}) {
-  const { pop } = useNavigation();
-
-  return (
-    <Form
-      navigationTitle={title}
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Apply"
-            icon={Icon.Check}
-            onSubmit={(values: { timezone: string }) => {
-              onSubmit(values.timezone);
-              pop();
-            }}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.Dropdown id="timezone" title="Timezone" defaultValue="UTC">
-        {COMMON_TIMEZONES.map((tz) => (
-          <Form.Dropdown.Item key={tz} value={tz} title={tz} />
-        ))}
-      </Form.Dropdown>
-    </Form>
-  );
-}
-
-function TimestampDetail({
-  iso,
-  local,
-  timestamp,
-  rawText,
-  label,
-  url,
-  offset,
-  kind,
-  ambiguous,
-}: {
-  readonly iso: string;
-  readonly local: string;
-  readonly timestamp: number;
-  readonly rawText: string;
-  readonly label: string | null;
-  readonly url: string | null;
-  readonly offset: string | null;
-  readonly kind: 'parsed' | 'event';
-  readonly ambiguous?: boolean;
-}) {
-  const unix = formatUnix(timestamp);
-  const relative = formatRelative(timestamp);
-  const isEvent = kind === 'event';
-
-  // Shortcut-prefixed field titles (⌘ adjacent to the first letter, which is the hotkey)
-  const labelTitle = '\u2318Label';
-  const urlTitle = '\u2318URL';
-  const noteTitle = '\u2318Note';
-
-  const hints = ambiguous
-    ? '\u21A9 UTC  \u00B7  \u2318T Local  \u00B7  \u2318\u21E7T Pick zone'
-    : kind === 'parsed'
-      ? '\u21A9 Pin  \u00B7  \u2318\u21E7\u21A9 Pin All  \u00B7  \u2318L Pin w/ label'
-      : '\u2303\u232B Delete  \u00B7  \u2303\u21E7\u232B Delete All';
-
-  const empty = '—';
-
-  return (
-    <List.Item.Detail
-      metadata={
-        <List.Item.Detail.Metadata>
-          <List.Item.Detail.Metadata.Label title="UTC" text={iso} />
-          <List.Item.Detail.Metadata.Label title="Local" text={local} />
-          <List.Item.Detail.Metadata.Label title="Unix" text={unix} />
-          <List.Item.Detail.Metadata.Label title="Relative" text={relative} />
-          {offset !== null ? (
-            <List.Item.Detail.Metadata.Label title="Offset" text={offset} />
-          ) : null}
-          {isEvent ? (
-            <>
-              <List.Item.Detail.Metadata.Separator />
-              {label !== null ? (
-                <List.Item.Detail.Metadata.TagList title={labelTitle}>
-                  <List.Item.Detail.Metadata.TagList.Item text={label} />
-                </List.Item.Detail.Metadata.TagList>
-              ) : (
-                <List.Item.Detail.Metadata.Label title={labelTitle} text={empty} />
-              )}
-              {url !== null ? (
-                <List.Item.Detail.Metadata.Link title={urlTitle} text={url} target={url} />
-              ) : (
-                <List.Item.Detail.Metadata.Label title={urlTitle} text={empty} />
-              )}
-              <List.Item.Detail.Metadata.Label title={noteTitle} text={rawText || empty} />
-            </>
-          ) : null}
-          <List.Item.Detail.Metadata.Separator />
-          <List.Item.Detail.Metadata.Label title={hints} text="" />
-        </List.Item.Detail.Metadata>
-      }
-    />
-  );
-}
-
-/** Extract just the time portion (HH:mm:ss.SSS) from an ISO string. */
-function extractTime(iso: string): string {
-  const match = /T(\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z/.exec(iso);
-  return match?.[1] ?? iso;
-}
-
-/** Extract just the date portion (YYYY-MM-DD) from an ISO string. */
-function extractDate(iso: string): string {
-  return iso.slice(0, 10);
-}
-

@@ -71,10 +71,10 @@ describe('extractTimestamps', () => {
     expect(results[2]!.iso).toBe('2026-04-04T18:02:35.001Z');
   });
 
-  it('preserves full log line as rawText', () => {
+  it('captures the full source line as note', () => {
     const input = '2026-04-04T18:02:31.123Z ERROR something broke';
     const results = extractTimestamps(input);
-    expect(results[0]!.rawText).toBe(input);
+    expect(results[0]!.note).toBe(input);
   });
 
   it('respects MAX_EXTRACT limit', () => {

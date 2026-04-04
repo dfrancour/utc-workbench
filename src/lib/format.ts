@@ -61,3 +61,14 @@ export function formatUnix(epochMs: number): string {
   const seconds = epochMs / 1000;
   return Number.isInteger(seconds) ? seconds.toString() : seconds.toFixed(3);
 }
+
+/** Extract just the time portion (HH:mm:ss[.SSS]) from an ISO8601 UTC string. */
+export function extractTime(iso: string): string {
+  const match = /T(\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z/.exec(iso);
+  return match?.[1] ?? iso;
+}
+
+/** Extract just the date portion (YYYY-MM-DD) from an ISO8601 string. */
+export function extractDate(iso: string): string {
+  return iso.slice(0, 10);
+}

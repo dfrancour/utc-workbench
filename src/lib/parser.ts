@@ -65,7 +65,7 @@ const MAX_EXTRACT = 50;
 
 /**
  * Parse a single input string and return all detected timestamps.
- * Each line of input is preserved as rawText for context.
+ * Each match's source line is captured as the initial note.
  */
 export function extractTimestamps(input: string): readonly ParsedTimestamp[] {
   const results: ParsedTimestamp[] = [];
@@ -86,11 +86,11 @@ export function extractTimestamps(input: string): readonly ParsedTimestamp[] {
 
       const lineStart = input.lastIndexOf('\n', match.index) + 1;
       const lineEnd = input.indexOf('\n', match.index);
-      const rawText = input.slice(lineStart, lineEnd === -1 ? undefined : lineEnd).trim();
+      const note = input.slice(lineStart, lineEnd === -1 ? undefined : lineEnd).trim();
 
       seen.add(posKey);
       results.push({
-        ...normalize(result.epochMs, rawText),
+        ...normalize(result.epochMs, note),
         ambiguous: result.ambiguous,
       });
     }

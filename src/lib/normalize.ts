@@ -5,14 +5,14 @@ import type { ParsedTimestamp } from '../types';
  * Normalize an epoch-ms value into a canonical ParsedTimestamp.
  * Does not set `ambiguous` — callers must set that themselves.
  */
-export function normalize(epochMs: number, rawText: string): Omit<ParsedTimestamp, 'ambiguous'> {
+export function normalize(epochMs: number, note: string): Omit<ParsedTimestamp, 'ambiguous'> {
   const dt = DateTime.fromMillis(epochMs, { zone: 'utc' });
 
   return {
     timestamp: epochMs,
     iso: dt.toISO() ?? new Date(epochMs).toISOString(),
     local: dt.toLocal().toFormat('yyyy-MM-dd HH:mm:ss.SSS ZZZZ'),
-    rawText,
+    note,
   };
 }
 
@@ -41,7 +41,7 @@ export function reinterpret(parsed: ParsedTimestamp, zone: string): ParsedTimest
 
   const epochMs = reinterpreted.toMillis();
   return {
-    ...normalize(epochMs, parsed.rawText),
+    ...normalize(epochMs, parsed.note),
     ambiguous: false,
   };
 }
