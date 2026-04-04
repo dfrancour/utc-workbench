@@ -54,6 +54,46 @@ describe('parseSingle', () => {
     expect(parseSingle('hello world')).toBeNull();
     expect(parseSingle('')).toBeNull();
   });
+
+  it('parses bare ISO with T separator and no timezone as ambiguous', () => {
+    const result = parseSingle('2026-04-04T18:02:31');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-04T18:02:31.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
+  it('parses slash-separated date-time as ambiguous', () => {
+    const result = parseSingle('2026/04/04 18:02:31');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-04T18:02:31.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
+  it('parses "Apr 3, 2026, 3:20 PM" as ambiguous', () => {
+    const result = parseSingle('Apr 3, 2026, 3:20 PM');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:00.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
+  it('parses "April 3, 2026 15:20:45" (full month, 24h, with seconds)', () => {
+    const result = parseSingle('April 3, 2026 15:20:45');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:45.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
+  it('parses "Apr 3, 2026" (date only)', () => {
+    const result = parseSingle('Apr 3, 2026');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T00:00:00.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
+  it('accepts mixed-case month names and am/pm markers', () => {
+    expect(parseSingle('APR 3, 2026, 3:20 pm')?.iso).toBe('2026-04-03T15:20:00.000Z');
+    expect(parseSingle('april 3, 2026, 3:20 AM')?.iso).toBe('2026-04-03T03:20:00.000Z');
+  });
 });
 
 describe('extractTimestamps', () => {
@@ -89,5 +129,32 @@ describe('extractTimestamps', () => {
   it('returns empty array for no timestamps', () => {
     expect(extractTimestamps('no timestamps here')).toHaveLength(0);
     expect(extractTimestamps('')).toHaveLength(0);
+  });
+
+  it('does not double-match ISO-with-Z as both ISO and bare-log format', () => {
+    // Regression: when the log-format regex was relaxed to accept a `T`
+    // separator, its substring match (19 chars) of an ISO-with-Z match
+    // (20 chars) started colliding with the dedup key. Range-overlap
+    // dedup should prevent this.
+    const results = extractTimestamps('2026-04-04T18:02:31Z');
+    expect(results).toHaveLength(1);
+    expect(results[0]!.ambiguous).toBe(false);
+  });
+
+  it('extracts a mix of formats from one input', () => {
+    const input = [
+      '2026-04-04T18:02:31Z first',
+      'Apr 3, 2026, 3:20 PM calendar entry',
+      '2026/04/05 09:15:00 slash format',
+      '1712253751 epoch',
+    ].join('\n');
+    const results = extractTimestamps(input);
+    expect(results).toHaveLength(4);
+    // Results are returned pattern-by-pattern, not in source order.
+    const isos = results.map((r) => r.iso).sort();
+    expect(isos).toContain('2026-04-04T18:02:31.000Z');
+    expect(isos).toContain('2026-04-03T15:20:00.000Z');
+    expect(isos).toContain('2026-04-05T09:15:00.000Z');
+    expect(isos).toContain('2024-04-04T18:02:31.000Z'); // 1712253751 → 2024-04-04
   });
 });
