@@ -51,6 +51,46 @@ describe('reinterpret', () => {
     expect(result.data).toBe('original log line');
   });
 
+  it('returns the original unchanged for an invalid zone', () => {
+    const original = {
+      ...normalize(1775325751000, 'raw'),
+      ambiguous: true,
+      label: 'api',
+      url: 'https://example.com',
+    };
+    const result = reinterpret(original, 'Not/A_Zone');
+    expect(result).toBe(original);
+  });
+
+  it('preserves label and url across reinterpretation', () => {
+    const original = {
+      ...normalize(1775325751000, 'raw'),
+      ambiguous: true,
+      label: 'api-gw',
+      url: 'https://grafana.internal/d/abc',
+    };
+    const result = reinterpret(original, 'America/Los_Angeles');
+    expect(result.label).toBe('api-gw');
+    expect(result.url).toBe('https://grafana.internal/d/abc');
+  });
+
+  it('supports re-reinterpreting an already-resolved timestamp', () => {
+    // Start ambiguous, resolve as UTC, then reinterpret as NYC. The second
+    // call should treat the current UTC iso's wall clock as the wall clock,
+    // not compound offsets.
+    const step0 = {
+      ...normalize(Date.UTC(2026, 6, 15, 12, 0, 0), 'raw'),
+      ambiguous: true,
+      label: null,
+      url: null,
+    };
+    const step1 = reinterpret(step0, 'utc');
+    expect(step1.iso).toBe('2026-07-15T12:00:00.000Z');
+    const step2 = reinterpret(step1, 'America/New_York');
+    // Wall 12:00 in EDT (UTC-4) = 16:00 UTC
+    expect(step2.iso).toBe('2026-07-15T16:00:00.000Z');
+  });
+
   it('applies the correct offset across a DST boundary', () => {
     // America/New_York: EST (UTC-5) in January, EDT (UTC-4) in July.
     // The parser assumes UTC when no zone is present, so the epoch it produces

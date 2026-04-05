@@ -14,7 +14,7 @@ export const STORAGE_KEY = 'utc-workbench-events-v2';
 type EventPatch = Partial<Pick<Event, 'label' | 'url' | 'data'>>;
 
 function generateId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return crypto.randomUUID();
 }
 
 /** Build a new Event from a parsed timestamp. */

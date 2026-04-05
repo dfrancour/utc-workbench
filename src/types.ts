@@ -10,7 +10,10 @@ export type Event = {
 };
 
 export type ParsedTimestamp = {
-  readonly timestamp: number; // epoch ms (assuming UTC if ambiguous)
+  // Epoch ms. For ambiguous inputs this is a tentative value assuming UTC;
+  // once `reinterpret` has run the value is authoritative and `ambiguous`
+  // flips to false.
+  readonly timestamp: number;
   readonly iso: string; // ISO8601 UTC
   readonly local: string; // localized representation
   readonly data: string; // source line the timestamp was extracted from

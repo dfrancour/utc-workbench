@@ -57,11 +57,55 @@ const PATTERNS: readonly {
   readonly regex: RegExp;
   readonly parse: (match: string) => PatternMatch | null;
 }[] = [
-  // ISO8601 / RFC3339 — explicit timezone, never ambiguous
+  // ISO8601 / RFC3339 — explicit timezone, never ambiguous.
+  // Also covers RFC5424 syslog, which is just ISO with fractional seconds.
   {
     regex: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})/g,
     parse: (match) => {
       const dt = DateTime.fromISO(match, { zone: 'utc' });
+      return dt.isValid ? { epochMs: dt.toMillis(), ambiguous: false } : null;
+    },
+  },
+
+  // Nginx/Apache common log format: `03/Apr/2026:15:20:50 +0000`, usually
+  // inside square brackets. Always has an explicit offset — never ambiguous.
+  //
+  // Luxon's `ZZ` token expects `+HH:MM` with a colon, but apache emits
+  // `+HHMM` without. We parse the wall clock with `UTC+0` and add the
+  // offset manually rather than relying on undocumented token behavior.
+  {
+    regex: /(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})/g,
+    parse: (match) => {
+      const m =
+        /^(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})$/.exec(match);
+      if (m === null) return null;
+      const [, wallPart, signChar, hh, mm] = m;
+      if (
+        wallPart === undefined ||
+        signChar === undefined ||
+        hh === undefined ||
+        mm === undefined
+      ) {
+        return null;
+      }
+      const wall = DateTime.fromFormat(wallPart, 'dd/LLL/yyyy:HH:mm:ss', {
+        zone: 'utc',
+        locale: 'en',
+      });
+      if (!wall.isValid) return null;
+      const sign = signChar === '-' ? 1 : -1; // subtract east-of-UTC to get UTC
+      const offsetMinutes = sign * (Number(hh) * 60 + Number(mm));
+      return { epochMs: wall.toMillis() + offsetMinutes * 60_000, ambiguous: false };
+    },
+  },
+
+  // RFC2822: `Wed, 03 Apr 2026 15:20:50 GMT` or `... +0000`.
+  // Always carries a zone (named or numeric) — never ambiguous.
+  {
+    regex:
+      /(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s+(?:GMT|UTC|UT|[A-Z]{1,5}|[+-]\d{4})/g,
+    parse: (match) => {
+      const dt = DateTime.fromRFC2822(match, { setZone: true });
       return dt.isValid ? { epochMs: dt.toMillis(), ambiguous: false } : null;
     },
   },
@@ -114,10 +158,27 @@ const PATTERNS: readonly {
     },
   },
 
-  // Unix epoch — inherently UTC, never ambiguous
+  // Unix epoch — inherently UTC, never ambiguous.
+  // Supports seconds (10 digits, optional fractional), milliseconds (13),
+  // microseconds (16), and nanoseconds (19). Longer variants come first so
+  // leftmost-alternation picks the most precise interpretation.
+  //
+  // 16- and 19-digit values exceed Number.MAX_SAFE_INTEGER near present-day
+  // timestamps, so we parse via BigInt and divide down to milliseconds.
   {
-    regex: /(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)|(?<!\d)\d{13}(?!\d)/g,
+    regex: /(?<!\d)\d{19}(?!\d)|(?<!\d)\d{16}(?!\d)|(?<!\d)\d{13}(?!\d)|(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)/g,
     parse: (match) => {
+      if (match.length === 19) {
+        // Nanoseconds. Divide by 1_000_000 in BigInt to avoid precision loss.
+        const ms = Number(BigInt(match) / 1_000_000n);
+        return Number.isFinite(ms) ? { epochMs: ms, ambiguous: false } : null;
+      }
+      if (match.length === 16) {
+        // Microseconds. 2026 is ~1.77e15 which is at the edge of safe Number
+        // range; use BigInt for safety.
+        const ms = Number(BigInt(match) / 1_000n);
+        return Number.isFinite(ms) ? { epochMs: ms, ambiguous: false } : null;
+      }
       const num = Number(match);
       if (!Number.isFinite(num)) return null;
 
@@ -126,6 +187,29 @@ const PATTERNS: readonly {
       }
 
       return { epochMs: Math.round(num * 1000), ambiguous: false };
+    },
+  },
+
+  // Syslog RFC3164: `Apr  3 15:20:50` (no year, no timezone). Single-digit
+  // days are space-padded per spec ("Apr  3" with two spaces), but we accept
+  // one-or-more whitespace to be lenient. Doubly ambiguous: missing year is
+  // assumed to be the current year, missing timezone is assumed UTC (flagged
+  // via the standard `ambiguous` mechanism so the user can override).
+  //
+  // Does not collide with the month-name pattern: month-name requires a 4-digit
+  // year, which can't appear in the `HH:mm:ss` position syslog expects here.
+  {
+    regex:
+      /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b/g,
+    parse: (match) => {
+      const normalized = match.replace(/\s+/g, ' ');
+      const currentYear = DateTime.now().year;
+      const dt = DateTime.fromFormat(
+        `${currentYear.toString()} ${normalized}`,
+        'yyyy LLL d HH:mm:ss',
+        { zone: 'utc' }
+      );
+      return dt.isValid ? { epochMs: dt.toMillis(), ambiguous: true } : null;
     },
   },
 

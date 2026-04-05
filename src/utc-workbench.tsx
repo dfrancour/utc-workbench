@@ -71,11 +71,11 @@ export default function UTCWorkbench() {
     };
   }, []);
 
-  const utcTime = now.toFormat('HH:mm:ss');
-  const localTime = now.toLocal().toFormat('HH:mm:ss');
-  const localZone = now.toLocal().toFormat('ZZZZ');
-  const localOffset = now.toLocal().toFormat('ZZ');
-  const navTitle = `UTC ${utcTime}  ·  ${localZone} ${localTime} (${localOffset})`;
+  const navTitle = useMemo(() => {
+    const utcTime = now.toFormat('HH:mm:ss');
+    const local = now.toLocal();
+    return `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm:ss')} (${local.toFormat('ZZ')})`;
+  }, [now]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -151,16 +151,6 @@ export default function UTCWorkbench() {
     }
   }
 
-  async function handleManualPin(parsed: ParsedTimestamp) {
-    try {
-      await setStoredEvents(addEvent(events, parsed, parsed.label, parsed.url));
-      setQuery('');
-      await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
-    } catch (error) {
-      await showFailureToast(error, { title: 'Failed to pin event' });
-    }
-  }
-
   async function handlePinAll(label?: string) {
     if (parsed.length === 0) return;
     const count = parsed.length;
@@ -200,6 +190,9 @@ export default function UTCWorkbench() {
     }
   }
 
+  // Note: `data` is intentionally not trimmed — unlike label/url it's free-form
+  // log context where leading/trailing whitespace can be meaningful (indentation,
+  // trailing newlines from multi-line paste).
   async function handleSetData(id: string, data: string) {
     try {
       await setStoredEvents(updateEvent(events, id, { data }));
@@ -223,29 +216,36 @@ export default function UTCWorkbench() {
     }
   }
 
-  function copyTimeline() {
-    return events
-      .map((e, i) => {
-        const prev = events[i - 1];
-        const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '---';
-        const label = e.label ? `[${e.label}] ` : '';
-        return `${e.iso} | ${e.local} | ${delta} | ${label}${e.data}`;
-      })
-      .join('\n');
-  }
+  // Memoized on events because these strings are passed as `content` on
+  // CopyToClipboard actions inside every row — without memoization each row's
+  // render eagerly rebuilds the whole timeline (O(N²) per paint).
+  const timelineText = useMemo(
+    () =>
+      events
+        .map((e, i) => {
+          const prev = events[i - 1];
+          const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '---';
+          const label = e.label ? `[${e.label}] ` : '';
+          return `${e.iso} | ${e.local} | ${delta} | ${label}${e.data}`;
+        })
+        .join('\n'),
+    [events]
+  );
 
-  function exportTimelineJson() {
-    return JSON.stringify(
-      events.map((e) => ({
-        iso: e.iso,
-        label: e.label,
-        url: e.url,
-        data: e.data || null,
-      })),
-      null,
-      2
-    );
-  }
+  const timelineJson = useMemo(
+    () =>
+      JSON.stringify(
+        events.map((e) => ({
+          iso: e.iso,
+          label: e.label,
+          url: e.url,
+          data: e.data || null,
+        })),
+        null,
+        2
+      ),
+    [events]
+  );
 
   const hasParsed = parsed.length > 0;
 
@@ -267,8 +267,22 @@ export default function UTCWorkbench() {
             title="New Manual Event"
             icon={Icon.PlusCircle}
             shortcut={{ modifiers: ['cmd'], key: 'n' }}
-            target={<ManualEventForm onSubmit={handleManualPin} />}
+            target={<ManualEventForm onSubmit={handlePin} />}
           />
+          {events.length > 0 ? (
+            <ActionPanel.Section title="Timeline">
+              <Action.CopyToClipboard
+                title="Copy Timeline"
+                content={timelineText}
+                shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
+              />
+              <Action.CopyToClipboard
+                title="Export Timeline as JSON"
+                content={timelineJson}
+                shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+              />
+            </ActionPanel.Section>
+          ) : null}
         </ActionPanel>
       }
     >
@@ -418,7 +432,7 @@ export default function UTCWorkbench() {
                         title="New Manual Event"
                         icon={Icon.PlusCircle}
                         shortcut={{ modifiers: ['cmd'], key: 'n' }}
-                        target={<ManualEventForm onSubmit={handleManualPin} />}
+                        target={<ManualEventForm onSubmit={handlePin} />}
                       />
                     </ActionPanel.Section>
                   </ActionPanel>
@@ -510,12 +524,12 @@ export default function UTCWorkbench() {
                       <Action.CopyToClipboard title="Copy Data" content={event.data} />
                       <Action.CopyToClipboard
                         title="Copy Timeline"
-                        content={copyTimeline()}
+                        content={timelineText}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
                       />
                       <Action.CopyToClipboard
                         title="Export Timeline as JSON"
-                        content={exportTimelineJson()}
+                        content={timelineJson}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
                       />
                     </ActionPanel.Section>
@@ -524,7 +538,7 @@ export default function UTCWorkbench() {
                         title="New Manual Event"
                         icon={Icon.PlusCircle}
                         shortcut={{ modifiers: ['cmd'], key: 'n' }}
-                        target={<ManualEventForm onSubmit={handleManualPin} />}
+                        target={<ManualEventForm onSubmit={handlePin} />}
                       />
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Danger">

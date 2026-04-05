@@ -103,6 +103,77 @@ describe('parseSingle', () => {
     expect(parseSingle('APR 3, 2026, 3:20 pm')?.iso).toBe('2026-04-03T15:20:00.000Z');
     expect(parseSingle('april 3, 2026, 3:20 AM')?.iso).toBe('2026-04-03T03:20:00.000Z');
   });
+
+  it('parses nginx/apache common log format with brackets', () => {
+    const result = parseSingle(
+      '127.0.0.1 - - [03/Apr/2026:15:20:50 +0000] "GET /api HTTP/1.1" 200 42'
+    );
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses nginx/apache format with non-zero offset', () => {
+    const result = parseSingle('[03/Apr/2026:10:20:50 -0500]');
+    expect(result).not.toBeNull();
+    // 10:20:50 -0500 = 15:20:50 UTC
+    expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses RFC2822 with GMT', () => {
+    // Apr 3, 2026 is a Friday — fromRFC2822 validates the weekday.
+    const result = parseSingle('Fri, 03 Apr 2026 15:20:50 GMT');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses RFC2822 with numeric offset', () => {
+    const result = parseSingle('Fri, 03 Apr 2026 10:20:50 -0500');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses syslog RFC3164 (no year, no timezone) as ambiguous', () => {
+    const result = parseSingle('Apr  3 15:20:50 myhost sshd[1234]: session opened');
+    expect(result).not.toBeNull();
+    expect(result!.ambiguous).toBe(true);
+    const currentYear = new Date().getUTCFullYear();
+    expect(result!.iso).toBe(`${currentYear.toString()}-04-03T15:20:50.000Z`);
+  });
+
+  it('parses syslog RFC3164 with two-digit day', () => {
+    const result = parseSingle('Apr 13 15:20:50 myhost sshd: accepted');
+    expect(result).not.toBeNull();
+    expect(result!.ambiguous).toBe(true);
+    const currentYear = new Date().getUTCFullYear();
+    expect(result!.iso).toBe(`${currentYear.toString()}-04-13T15:20:50.000Z`);
+  });
+
+  it('parses Unix epoch in microseconds (16 digits)', () => {
+    // 2026-04-04T18:02:31.123456Z
+    const result = parseSingle('1775325751123456');
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(1775325751123);
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses Unix epoch in nanoseconds (19 digits)', () => {
+    // Go's time.Now().UnixNano() shape; 2026-04-04T18:02:31.123456789Z
+    const result = parseSingle('1775325751123456789');
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(1775325751123);
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it('parses RFC5424 syslog (ISO with fractional seconds + zone)', () => {
+    const result = parseSingle('2026-04-03T15:20:50.123456Z host app - - - message');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:50.123Z');
+    expect(result!.ambiguous).toBe(false);
+  });
 });
 
 describe('extractTimestamps', () => {
