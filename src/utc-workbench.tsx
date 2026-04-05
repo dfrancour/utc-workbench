@@ -13,17 +13,13 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
-import {
-  extractDate,
-  extractTime,
-  formatDelta,
-  formatUnix,
-} from './lib/format';
+import { extractDate, extractTime, formatDelta } from './lib/format';
 import {
   STORAGE_KEY,
   addEvent,
   addEvents,
   removeEvent,
+  replaceEventFields,
   sortEvents,
   updateEvent,
 } from './lib/store';
@@ -166,6 +162,15 @@ export default function UTCWorkbench() {
     }
   }
 
+  async function handleEditEvent(id: string, parsed: ParsedTimestamp) {
+    try {
+      await setStoredEvents(replaceEventFields(events, id, parsed));
+      await showToast({ style: Toast.Style.Success, title: 'Event updated' });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to update event' });
+    }
+  }
+
   async function handleRemove(id: string) {
     try {
       await setStoredEvents(removeEvent(events, id));
@@ -205,7 +210,7 @@ export default function UTCWorkbench() {
     const confirmed = await confirmAlert({
       title: 'Delete All Events',
       message: 'Permanently delete all pinned events?',
-      primaryAction: { title: 'Delete All', style: Alert.ActionStyle.Destructive },
+      primaryAction: { title: 'Delete All Events', style: Alert.ActionStyle.Destructive },
     });
     if (!confirmed) return;
     try {
@@ -219,24 +224,27 @@ export default function UTCWorkbench() {
   // Memoized on events because these strings are passed as `content` on
   // CopyToClipboard actions inside every row — without memoization each row's
   // render eagerly rebuilds the whole timeline (O(N²) per paint).
-  const timelineText = useMemo(
-    () =>
-      events
-        .map((e, i) => {
-          const prev = events[i - 1];
-          const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '---';
-          const label = e.label ? `[${e.label}] ` : '';
-          return `${e.iso} | ${e.local} | ${delta} | ${label}${e.data}`;
-        })
-        .join('\n'),
-    [events]
-  );
+  const timelineMarkdown = useMemo(() => {
+    if (events.length === 0) return '';
+    const header = '| UTC | Δ | Event | Link |\n| --- | --- | --- | --- |';
+    const rows = events.map((e, i) => {
+      const prev = events[i - 1];
+      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '—';
+      const labelPrefix = e.label ? `[${e.label}] ` : '';
+      // Angle-bracket link form handles URLs containing parens without
+      // requiring percent-encoding; pipes in URLs are vanishingly rare but
+      // still escaped for table safety.
+      const link = e.url ? `[Link](<${e.url.replace(/\|/g, '%7C')}>)` : '';
+      return `| ${escapeMdCell(e.iso)} | ${delta} | ${escapeMdCell(labelPrefix + e.data)} | ${link} |`;
+    });
+    return [header, ...rows].join('\n');
+  }, [events]);
 
   const timelineJson = useMemo(
     () =>
       JSON.stringify(
         events.map((e) => ({
-          iso: e.iso,
+          utc: e.iso,
           label: e.label,
           url: e.url,
           data: e.data || null,
@@ -272,12 +280,12 @@ export default function UTCWorkbench() {
           {events.length > 0 ? (
             <ActionPanel.Section title="Timeline">
               <Action.CopyToClipboard
-                title="Copy Timeline"
-                content={timelineText}
+                title="Copy Timeline as Markdown"
+                content={timelineMarkdown}
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
               />
               <Action.CopyToClipboard
-                title="Export Timeline as JSON"
+                title="Copy Timeline as JSON"
                 content={timelineJson}
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
               />
@@ -420,12 +428,8 @@ export default function UTCWorkbench() {
                       />
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy ISO" content={r.iso} />
+                      <Action.CopyToClipboard title="Copy UTC" content={r.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={r.local} />
-                      <Action.CopyToClipboard
-                        title="Copy Unix"
-                        content={formatUnix(r.timestamp)}
-                      />
                     </ActionPanel.Section>
                     <ActionPanel.Section title="New">
                       <Action.Push
@@ -464,6 +468,17 @@ export default function UTCWorkbench() {
                 actions={
                   <ActionPanel>
                     <ActionPanel.Section title="Event">
+                      <Action.Push
+                        title="Edit Event"
+                        icon={Icon.Pencil}
+                        shortcut={{ modifiers: ['cmd'], key: 'e' }}
+                        target={
+                          <ManualEventForm
+                            initialEvent={event}
+                            onSubmit={(parsed) => handleEditEvent(event.id, parsed)}
+                          />
+                        }
+                      />
                       <Action.Push
                         title={event.label ? 'Edit Label' : 'Add Label'}
                         icon={Icon.Tag}
@@ -520,15 +535,15 @@ export default function UTCWorkbench() {
                       ) : null}
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy ISO" content={event.iso} />
+                      <Action.CopyToClipboard title="Copy UTC" content={event.iso} />
                       <Action.CopyToClipboard title="Copy Data" content={event.data} />
                       <Action.CopyToClipboard
-                        title="Copy Timeline"
-                        content={timelineText}
+                        title="Copy Timeline as Markdown"
+                        content={timelineMarkdown}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
                       />
                       <Action.CopyToClipboard
-                        title="Export Timeline as JSON"
+                        title="Copy Timeline as JSON"
                         content={timelineJson}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
                       />
@@ -576,4 +591,13 @@ export default function UTCWorkbench() {
 function trimOrNull(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+/**
+ * Escape a cell value for a GitHub-flavored markdown table: pipes become
+ * `\|` (otherwise they'd break the column), and any internal newlines become
+ * `<br>` since md tables can't span multiple lines natively.
+ */
+function escapeMdCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }

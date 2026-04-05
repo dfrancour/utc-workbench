@@ -4,7 +4,6 @@ import {
   extractTime,
   formatDelta,
   formatRelative,
-  formatUnix,
 } from '../lib/format';
 
 describe('formatDelta', () => {
@@ -26,16 +25,6 @@ describe('formatDelta', () => {
   it('formats hours and minutes', () => {
     expect(formatDelta(3_660_000)).toBe('+1h 1m');
     expect(formatDelta(3_600_000)).toBe('+1h');
-  });
-});
-
-describe('formatUnix', () => {
-  it('formats integer epochs without decimals', () => {
-    expect(formatUnix(1712253751000)).toBe('1712253751');
-  });
-
-  it('formats fractional epochs with 3 decimal places', () => {
-    expect(formatUnix(1712253751123)).toBe('1712253751.123');
   });
 });
 

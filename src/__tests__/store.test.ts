@@ -4,6 +4,7 @@ import {
   addEvents,
   createEvent,
   removeEvent,
+  replaceEventFields,
   sortEvents,
   updateEvent,
 } from '../lib/store';
@@ -94,6 +95,35 @@ describe('updateEvent', () => {
     const a = createEvent(parsed(1_000));
     const result = updateEvent([a], a.id, { label: 'db', url: 'https://x', data: 'n' });
     expect(result[0]).toMatchObject({ label: 'db', url: 'https://x', data: 'n' });
+  });
+});
+
+describe('replaceEventFields', () => {
+  it('replaces timestamp and metadata while preserving id and ingestedAt', () => {
+    const original = createEvent(parsed(1_000, 'old'), 'old-label', 'https://old');
+    const next: ParsedTimestamp = {
+      timestamp: 5_000,
+      iso: '1970-01-01T00:00:05.000Z',
+      local: 'irrelevant',
+      data: 'new',
+      ambiguous: false,
+      label: 'new-label',
+      url: 'https://new',
+    };
+    const result = replaceEventFields([original], original.id, next);
+    expect(result[0]?.id).toBe(original.id);
+    expect(result[0]?.ingestedAt).toBe(original.ingestedAt);
+    expect(result[0]?.timestamp).toBe(5_000);
+    expect(result[0]?.iso).toBe('1970-01-01T00:00:05.000Z');
+    expect(result[0]?.data).toBe('new');
+    expect(result[0]?.label).toBe('new-label');
+    expect(result[0]?.url).toBe('https://new');
+  });
+
+  it('is a no-op when id is unknown', () => {
+    const a = createEvent(parsed(1_000));
+    const next: ParsedTimestamp = { ...parsed(2_000), label: null, url: null };
+    expect(replaceEventFields([a], 'missing', next)).toEqual([a]);
   });
 });
 

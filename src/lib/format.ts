@@ -54,14 +54,6 @@ export function formatRelative(epochMs: number): string {
   return isPast ? `${label} ago` : `in ${label}`;
 }
 
-/**
- * Format a Unix epoch in seconds (with optional fractional ms).
- */
-export function formatUnix(epochMs: number): string {
-  const seconds = epochMs / 1000;
-  return Number.isInteger(seconds) ? seconds.toString() : seconds.toFixed(3);
-}
-
 /** Extract just the time portion (HH:mm:ss[.SSS]) from an ISO8601 UTC string. */
 export function extractTime(iso: string): string {
   const match = /T(\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z/.exec(iso);

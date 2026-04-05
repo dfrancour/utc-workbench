@@ -1,5 +1,5 @@
 import { Color, List } from '@raycast/api';
-import { formatRelative, formatUnix } from '../lib/format';
+import { formatRelative } from '../lib/format';
 import type { Event, ParsedTimestamp } from '../types';
 
 type TimestampDetailProps =
@@ -22,11 +22,11 @@ const EMPTY = '—';
 
 const HINTS_PARSED =
   '\u21A9 Pin  \u00B7  \u2318L Label  \u00B7  \u2318U URL  \u00B7  \u2318D Data';
-const HINTS_EVENT = '\u2303\u232B Delete  \u00B7  \u2303\u21E7\u232B Delete All';
+const HINTS_EVENT =
+  '\u2303\u232B Delete Event  \u00B7  \u2303\u21E7\u232B Delete All Events';
 
 export function TimestampDetail(props: TimestampDetailProps) {
   const base = props.kind === 'parsed' ? props.parsed : props.event;
-  const unix = formatUnix(base.timestamp);
   const relative = formatRelative(base.timestamp);
   const ambiguous = props.kind === 'parsed' && props.parsed.ambiguous;
 
@@ -60,7 +60,6 @@ export function TimestampDetail(props: TimestampDetailProps) {
             <>
               <List.Item.Detail.Metadata.Label title="UTC" text={base.iso} />
               <List.Item.Detail.Metadata.Label title="Local" text={base.local} />
-              <List.Item.Detail.Metadata.Label title="Unix" text={unix} />
               <List.Item.Detail.Metadata.Label title="Relative" text={relative} />
               {props.offset !== null ? (
                 <List.Item.Detail.Metadata.Label title="Offset" text={props.offset} />

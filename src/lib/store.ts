@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Event, ParsedTimestamp } from '../types';
 
 /**
@@ -14,7 +15,7 @@ export const STORAGE_KEY = 'utc-workbench-events-v2';
 type EventPatch = Partial<Pick<Event, 'label' | 'url' | 'data'>>;
 
 function generateId(): string {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 /** Build a new Event from a parsed timestamp. */
@@ -72,6 +73,31 @@ export function updateEvent(
   patch: EventPatch
 ): readonly Event[] {
   return events.map((e) => (e.id === id ? { ...e, ...patch } : e));
+}
+
+/**
+ * Replace the user-facing fields of an event (timestamp + metadata) from a
+ * new ParsedTimestamp. Preserves `id` and `ingestedAt`. Used by the Edit
+ * Timestamp flow, which re-uses the ManualEventForm for both create and edit.
+ */
+export function replaceEventFields(
+  events: readonly Event[],
+  id: string,
+  parsed: ParsedTimestamp
+): readonly Event[] {
+  return events.map((e) =>
+    e.id === id
+      ? {
+          ...e,
+          timestamp: parsed.timestamp,
+          iso: parsed.iso,
+          local: parsed.local,
+          data: parsed.data,
+          label: parsed.label,
+          url: parsed.url,
+        }
+      : e
+  );
 }
 
 /** Return a new list with the event removed. */

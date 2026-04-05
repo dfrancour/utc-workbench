@@ -2,10 +2,14 @@ import { Action, ActionPanel, Form, Icon, useNavigation } from '@raycast/api';
 import { useState } from 'react';
 import { DateTime } from 'luxon';
 import { normalize } from '../lib/normalize';
-import type { ParsedTimestamp } from '../types';
+import type { Event, ParsedTimestamp } from '../types';
 
 type ManualEventFormProps = {
   readonly onSubmit: (parsed: ParsedTimestamp) => Promise<void> | void;
+  // Optional existing event — switches the form into edit mode. Fields are
+  // pre-seeded from the event, the submit button becomes "Save Changes", and
+  // the navigation title shifts to reflect editing rather than creating.
+  readonly initialEvent?: Event;
 };
 
 type ZoneMode = 'local' | 'utc';
@@ -78,13 +82,39 @@ function combineDateAndTime(
   return combined.isValid ? combined.toMillis() : null;
 }
 
-export function ManualEventForm({ onSubmit }: ManualEventFormProps) {
+export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps) {
   const { pop } = useNavigation();
 
-  const initialNow = DateTime.local();
-  const [pickedDate, setPickedDate] = useState<Date>(() => initialNow.startOf('day').toJSDate());
-  const [timeText, setTimeText] = useState<string>(() => initialNow.toFormat('HH:mm:ss'));
-  const [zoneMode, setZoneMode] = useState<ZoneMode>('local');
+  const isEdit = initialEvent !== undefined;
+
+  // Edit mode seeds from the event's canonical UTC representation. The date
+  // picker expects a local-midnight Date, so we build one from the UTC Y/M/D
+  // of the event. Default zone mode is UTC because the stored iso *is* UTC —
+  // saving without changing the dropdown round-trips to the same timestamp.
+  const [pickedDate, setPickedDate] = useState<Date>(() => {
+    if (initialEvent !== undefined) {
+      const utc = DateTime.fromISO(initialEvent.iso, { zone: 'utc' });
+      return DateTime.fromObject(
+        { year: utc.year, month: utc.month, day: utc.day },
+        { zone: 'local' }
+      )
+        .startOf('day')
+        .toJSDate();
+    }
+    return DateTime.local().startOf('day').toJSDate();
+  });
+  const [timeText, setTimeText] = useState<string>(() => {
+    if (initialEvent !== undefined) {
+      const utc = DateTime.fromISO(initialEvent.iso, { zone: 'utc' });
+      // Drop trailing .000 for a cleaner default, keep fractional seconds
+      // otherwise so the user doesn't silently lose precision on save.
+      return utc.millisecond === 0
+        ? utc.toFormat('HH:mm:ss')
+        : utc.toFormat('HH:mm:ss.SSS');
+    }
+    return DateTime.local().toFormat('HH:mm:ss');
+  });
+  const [zoneMode, setZoneMode] = useState<ZoneMode>(isEdit ? 'utc' : 'local');
   const [timeError, setTimeError] = useState<string | undefined>(undefined);
 
   const parsedTime = parseTimeString(timeText);
@@ -101,12 +131,12 @@ export function ManualEventForm({ onSubmit }: ManualEventFormProps) {
 
   return (
     <Form
-      navigationTitle="New Manual Event"
+      navigationTitle={isEdit ? 'Edit Event' : 'New Manual Event'}
       actions={
         <ActionPanel>
           <Action.SubmitForm
-            title="Pin to Timeline"
-            icon={Icon.Pin}
+            title={isEdit ? 'Save Changes' : 'Pin to Timeline'}
+            icon={isEdit ? Icon.Check : Icon.Pin}
             onSubmit={async (values: { label?: string; url?: string; data?: string }) => {
               if (parsedTime === null) {
                 setTimeError('Invalid time (try HH:mm:ss or h:mm AM/PM)');
@@ -167,16 +197,19 @@ export function ManualEventForm({ onSubmit }: ManualEventFormProps) {
         id="label"
         title="Label"
         placeholder="e.g., api-gw, postgres, auth-service (optional)"
+        defaultValue={initialEvent?.label ?? ''}
       />
       <Form.TextField
         id="url"
         title="URL"
         placeholder="e.g., https://grafana.internal/d/abc123 (optional)"
+        defaultValue={initialEvent?.url ?? ''}
       />
       <Form.TextArea
         id="data"
         title="Data"
         placeholder="Log line, annotation, or any context (optional)"
+        defaultValue={initialEvent?.data ?? ''}
       />
     </Form>
   );
