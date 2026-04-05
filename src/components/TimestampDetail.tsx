@@ -2,17 +2,24 @@ import { Color, List } from '@raycast/api';
 import { formatRelative } from '../lib/format';
 import type { Event, ParsedTimestamp } from '../types';
 
-type TimestampDetailProps =
+type TimestampDetailProps = (
   | {
       readonly kind: 'parsed';
       readonly parsed: ParsedTimestamp;
-      readonly offset: string | null;
     }
   | {
       readonly kind: 'event';
       readonly event: Event;
-      readonly offset: string | null;
-    };
+    }
+) & {
+  readonly offset: string | null;
+  /**
+   * True when this row is the *explicit* reference (set via "Set as
+   * Reference"), as opposed to the implicit selection-follows-reference
+   * behavior. Drives the "Reference" tag in the metadata panel.
+   */
+  readonly isReference: boolean;
+};
 
 // Shortcut-prefixed field titles (⌘ adjacent to the first letter, which is the hotkey).
 const LABEL_TITLE = '\u2318Label';
@@ -23,7 +30,7 @@ const EMPTY = '—';
 const HINTS_PARSED =
   '\u21A9 Pin  \u00B7  \u2318L Label  \u00B7  \u2318U URL  \u00B7  \u2318D Data';
 const HINTS_EVENT =
-  '\u2303\u232B Delete Event  \u00B7  \u2303\u21E7\u232B Delete All Events';
+  '\u2318R Set Reference  \u00B7  \u2303\u232B Delete Event  \u00B7  \u2303\u21E7\u232B Delete All Events';
 
 export function TimestampDetail(props: TimestampDetailProps) {
   const base = props.kind === 'parsed' ? props.parsed : props.event;
@@ -61,7 +68,14 @@ export function TimestampDetail(props: TimestampDetailProps) {
               <List.Item.Detail.Metadata.Label title="UTC" text={base.iso} />
               <List.Item.Detail.Metadata.Label title="Local" text={base.local} />
               <List.Item.Detail.Metadata.Label title="Relative" text={relative} />
-              {props.offset !== null ? (
+              {props.isReference ? (
+                <List.Item.Detail.Metadata.TagList title="Offset">
+                  <List.Item.Detail.Metadata.TagList.Item
+                    text="Reference (Δ = 0)"
+                    color={Color.Blue}
+                  />
+                </List.Item.Detail.Metadata.TagList>
+              ) : props.offset !== null ? (
                 <List.Item.Detail.Metadata.Label title="Offset" text={props.offset} />
               ) : null}
             </>

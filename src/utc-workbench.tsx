@@ -56,6 +56,12 @@ export default function UTCWorkbench() {
   const [parsed, setParsed] = useState<readonly ParsedTimestamp[]>([]);
   const [parsedTruncated, setParsedTruncated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Explicit "reference row" for delta calculation. When set, it overrides
+  // the default selection-follows behavior so the user can navigate around
+  // without losing their anchor point — the core ergonomic need for
+  // cross-service latency analysis. When null, selection doubles as the
+  // reference (zero-setup for the common case of a quick comparison).
+  const [referenceId, setReferenceId] = useState<string | null>(null);
   const [now, setNow] = useState(() => DateTime.now().toUTC());
 
   // The nav title shows an HH:mm clock. Ticking every second would force the
@@ -130,13 +136,36 @@ export default function UTCWorkbench() {
     return map;
   }, [parsedRows, events]);
 
-  const selectedTimestamp =
-    selectedId !== null ? (timestampById.get(selectedId) ?? null) : null;
+  // An explicit reference wins over selection; if neither is valid, falls
+  // back to null and no deltas are shown anywhere.
+  const effectiveReferenceId = referenceId ?? selectedId;
+  const referenceTimestamp =
+    effectiveReferenceId !== null
+      ? (timestampById.get(effectiveReferenceId) ?? null)
+      : null;
+
+  // If an explicit reference becomes stale (row no longer exists after a
+  // query edit or deletion), clear it so the UI doesn't show stale offsets.
+  useEffect(() => {
+    if (referenceId !== null && !timestampById.has(referenceId)) {
+      setReferenceId(null);
+    }
+  }, [referenceId, timestampById]);
 
   function offsetFrom(timestamp: number, itemId: string): string | null {
-    if (selectedTimestamp === null) return null;
-    if (itemId === selectedId) return null;
-    return formatDelta(timestamp - selectedTimestamp);
+    if (referenceTimestamp === null) return null;
+    if (itemId === effectiveReferenceId) return null;
+    return formatDelta(timestamp - referenceTimestamp);
+  }
+
+  function handleSetReference(id: string) {
+    setReferenceId(id);
+    void showToast({ style: Toast.Style.Success, title: 'Reference set' });
+  }
+
+  function handleClearReference() {
+    setReferenceId(null);
+    void showToast({ style: Toast.Style.Success, title: 'Reference cleared' });
   }
 
   // Precondition: `events` is sorted by timestamp ascending, so same-date
@@ -333,7 +362,10 @@ export default function UTCWorkbench() {
         >
           {parsedRows.map(({ id: itemId, result: r }, i) => {
             const offset = offsetFrom(r.timestamp, itemId);
-            const subtitle = r.ambiguous ? 'No timezone — select one' : offset;
+            // List subtitle never shows the delta — that lives in the
+            // detail pane. Here we surface the ambiguity warning or the
+            // user's label, whichever is relevant.
+            const subtitle = r.ambiguous ? 'No timezone — select one' : r.label;
             return (
               <List.Item
                 id={itemId}
@@ -341,7 +373,14 @@ export default function UTCWorkbench() {
                 icon={r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass}
                 title={r.iso}
                 {...(subtitle !== null ? { subtitle } : {})}
-                detail={<TimestampDetail kind="parsed" parsed={r} offset={offset} />}
+                detail={
+                  <TimestampDetail
+                    kind="parsed"
+                    parsed={r}
+                    offset={offset}
+                    isReference={referenceId === itemId}
+                  />
+                }
                 actions={
                   <ActionPanel>
                     {r.ambiguous ? (
@@ -410,6 +449,23 @@ export default function UTCWorkbench() {
                         </>
                       ) : null}
                     </ActionPanel.Section>
+                    <ActionPanel.Section title="Compare">
+                      <Action
+                        title="Set as Reference"
+                        icon={Icon.BullsEye}
+                        shortcut={{ modifiers: ['cmd'], key: 'r' }}
+                        onAction={() => {
+                          handleSetReference(itemId);
+                        }}
+                      />
+                      {referenceId !== null ? (
+                        <Action
+                          title="Clear Reference"
+                          icon={Icon.XMarkCircle}
+                          onAction={handleClearReference}
+                        />
+                      ) : null}
+                    </ActionPanel.Section>
                     <ActionPanel.Section title="Metadata">
                       <Action.Push
                         title={r.label ? 'Edit Label' : 'Add Label'}
@@ -464,6 +520,9 @@ export default function UTCWorkbench() {
                     <ActionPanel.Section title="Copy">
                       <Action.CopyToClipboard title="Copy UTC" content={r.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={r.local} />
+                      {r.url ? (
+                        <Action.CopyToClipboard title="Copy URL" content={r.url} />
+                      ) : null}
                     </ActionPanel.Section>
                     <ActionPanel.Section title="New">
                       <Action.Push
@@ -490,7 +549,7 @@ export default function UTCWorkbench() {
           {group.events.map((event) => {
             const itemId = `event-${event.id}`;
             const offset = offsetFrom(event.timestamp, itemId);
-            const subtitle = offset ?? event.label;
+            const subtitle = event.label;
             return (
               <List.Item
                 id={itemId}
@@ -498,7 +557,14 @@ export default function UTCWorkbench() {
                 icon={event.label ? Icon.Tag : Icon.Clock}
                 title={extractTime(event.iso)}
                 {...(subtitle !== null ? { subtitle } : {})}
-                detail={<TimestampDetail kind="event" event={event} offset={offset} />}
+                detail={
+                  <TimestampDetail
+                    kind="event"
+                    event={event}
+                    offset={offset}
+                    isReference={referenceId === itemId}
+                  />
+                }
                 actions={
                   <ActionPanel>
                     <ActionPanel.Section title="Event">
@@ -568,9 +634,30 @@ export default function UTCWorkbench() {
                         />
                       ) : null}
                     </ActionPanel.Section>
+                    <ActionPanel.Section title="Compare">
+                      <Action
+                        title="Set as Reference"
+                        icon={Icon.BullsEye}
+                        shortcut={{ modifiers: ['cmd'], key: 'r' }}
+                        onAction={() => {
+                          handleSetReference(itemId);
+                        }}
+                      />
+                      {referenceId !== null ? (
+                        <Action
+                          title="Clear Reference"
+                          icon={Icon.XMarkCircle}
+                          onAction={handleClearReference}
+                        />
+                      ) : null}
+                    </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
                       <Action.CopyToClipboard title="Copy UTC" content={event.iso} />
+                      <Action.CopyToClipboard title="Copy Local" content={event.local} />
                       <Action.CopyToClipboard title="Copy Data" content={event.data} />
+                      {event.url ? (
+                        <Action.CopyToClipboard title="Copy URL" content={event.url} />
+                      ) : null}
                       <Action.CopyToClipboard
                         title="Copy Timeline as Markdown"
                         content={timelineMarkdown}
