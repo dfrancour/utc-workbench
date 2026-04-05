@@ -18,12 +18,31 @@ function generateId(): string {
   return randomUUID();
 }
 
+/**
+ * Extract the first http/https URL from a string of free-form text.
+ * Used to seed an event's `url` field from a log line that already
+ * contains a link (Grafana, Sentry, PR, ticket) so users don't have to
+ * copy-paste it into a second field by hand.
+ *
+ * The regex stops at whitespace, angle-bracket close, or common trailing
+ * punctuation (`.,;:!?)]}"'`) so a URL at the end of an English sentence
+ * doesn't absorb the period.
+ */
+export function extractFirstUrl(text: string): string | null {
+  const match = /\bhttps?:\/\/[^\s<>)\]}"'`]+[^\s<>)\]}"'`.,;:!?]/i.exec(text);
+  return match?.[0] ?? null;
+}
+
 /** Build a new Event from a parsed timestamp. */
 export function createEvent(
   parsed: ParsedTimestamp,
   label?: string | null,
   url?: string | null
 ): Event {
+  // If the caller didn't supply a URL, auto-seed from the source data —
+  // log lines often carry Grafana / Sentry / PR links inline and it's
+  // annoying to make users copy them into a second field by hand.
+  const resolvedUrl = url ?? extractFirstUrl(parsed.data);
   return {
     id: generateId(),
     timestamp: parsed.timestamp,
@@ -31,7 +50,7 @@ export function createEvent(
     local: parsed.local,
     data: parsed.data,
     label: label ?? null,
-    url: url ?? null,
+    url: resolvedUrl,
     ingestedAt: Date.now(),
   };
 }

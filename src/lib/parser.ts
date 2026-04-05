@@ -301,10 +301,77 @@ const PATTERNS: readonly {
       return null;
     },
   },
+
+  // Date-less time: "15:20", "15:20:30", "15:20 EST", "15:20:30.250 PST".
+  //
+  // This pattern only matches when an entire line consists of a bare time
+  // (optionally with a trailing timezone abbreviation). Line-anchoring via
+  // `/m` and the use of horizontal whitespace `[ \t]` — never `\s`, which
+  // would include newlines — ensures we don't false-match times embedded in
+  // log prose like "request took 15:20 to complete".
+  //
+  // The calendar date is filled in from today's UTC date at parse time.
+  // If the line carries a recognized abbreviation the result is exact;
+  // otherwise it's ambiguous so the user can reinterpret in a specific
+  // zone. Intended for on-call scenarios where a ticket or Slack message
+  // says "incident started at 15:20 EST" with "today" implied.
+  //
+  // Comes last in PATTERNS so more specific formats claim their ranges
+  // first — a full "2026-04-04 15:20:00 PST" is picked up by the log
+  // pattern and this one never fires on it.
+  {
+    regex:
+      /^[ \t]*\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?(?:[ \t]+[A-Z]{2,5})?[ \t]*$/gm,
+    parse: (match) => {
+      const parts =
+        /^[ \t]*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?)(?:[ \t]+([A-Z]{2,5}))?[ \t]*$/.exec(
+          match
+        );
+      if (parts === null) return null;
+      const [, time, abbr] = parts;
+      if (time === undefined) return null;
+
+      // Combine the time with today's UTC midnight. We try the most
+      // precise format first so fractional seconds are preserved when
+      // present.
+      const today = DateTime.utc().startOf('day');
+      let combined: DateTime | null = null;
+      for (const fmt of ['H:mm:ss.u', 'H:mm:ss', 'H:mm']) {
+        const candidate = DateTime.fromFormat(time, fmt, { zone: 'utc' });
+        if (candidate.isValid) {
+          combined = today.set({
+            hour: candidate.hour,
+            minute: candidate.minute,
+            second: candidate.second,
+            millisecond: candidate.millisecond,
+          });
+          break;
+        }
+      }
+      if (combined === null) return null;
+
+      const wallMs = combined.toMillis();
+      // Recognized abbreviation → exact offset. Unknown abbreviation or
+      // no abbreviation → ambiguous; the user picks a zone in the UI.
+      if (abbr !== undefined) {
+        const offsetMinutes = TIMEZONE_ABBREVIATIONS[abbr];
+        if (offsetMinutes !== undefined) {
+          return { epochMs: wallMs - offsetMinutes * 60_000, ambiguous: false };
+        }
+      }
+      return { epochMs: wallMs, ambiguous: true };
+    },
+  },
 ];
 
-/** Maximum timestamps to extract per ingestion (guardrail) */
-export const MAX_EXTRACT = 50;
+/**
+ * Maximum timestamps to extract per ingestion.
+ *
+ * Sized for incident-scale pastes (multi-service log dumps, a few hundred
+ * lines) rather than as a tight guardrail. Truncation is surfaced in the
+ * UI subtitle, so users who hit the cap know they've hit it.
+ */
+export const MAX_EXTRACT = 500;
 
 export type ExtractResult = {
   readonly timestamps: readonly ParsedTimestamp[];

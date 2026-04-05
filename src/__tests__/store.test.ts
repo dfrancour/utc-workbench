@@ -3,6 +3,7 @@ import {
   addEvent,
   addEvents,
   createEvent,
+  extractFirstUrl,
   removeEvent,
   replaceEventFields,
   sortEvents,
@@ -29,6 +30,60 @@ describe('createEvent', () => {
     expect(e.data).toBe('line');
     expect(e.label).toBe('api-gw');
     expect(e.url).toBeNull();
+  });
+
+  it('auto-extracts a URL from data when none is provided', () => {
+    const e = createEvent(
+      parsed(1_000, 'ERROR db pool exhausted see https://grafana.internal/d/abc for details')
+    );
+    expect(e.url).toBe('https://grafana.internal/d/abc');
+  });
+
+  it('prefers an explicit URL over the one in data', () => {
+    const e = createEvent(
+      parsed(1_000, 'see https://grafana.internal/d/abc'),
+      null,
+      'https://override.example/x'
+    );
+    expect(e.url).toBe('https://override.example/x');
+  });
+
+  it('leaves url null when data has no URL', () => {
+    expect(createEvent(parsed(1_000, 'plain log line')).url).toBeNull();
+  });
+});
+
+describe('extractFirstUrl', () => {
+  it('finds http and https URLs', () => {
+    expect(extractFirstUrl('see http://example.com')).toBe('http://example.com');
+    expect(extractFirstUrl('see https://example.com')).toBe('https://example.com');
+  });
+
+  it('stops at whitespace', () => {
+    expect(extractFirstUrl('a https://x.com/path b')).toBe('https://x.com/path');
+  });
+
+  it('does not consume a trailing sentence period', () => {
+    expect(extractFirstUrl('visit https://example.com.')).toBe('https://example.com');
+  });
+
+  it('does not consume a trailing comma or paren', () => {
+    expect(extractFirstUrl('see https://ex.com/a, next')).toBe('https://ex.com/a');
+    expect(extractFirstUrl('(see https://ex.com/a)')).toBe('https://ex.com/a');
+  });
+
+  it('returns the first URL when there are multiple', () => {
+    expect(extractFirstUrl('https://a.com and https://b.com')).toBe('https://a.com');
+  });
+
+  it('returns null when there is no URL', () => {
+    expect(extractFirstUrl('no link here')).toBeNull();
+    expect(extractFirstUrl('')).toBeNull();
+  });
+
+  it('does not match bare domains or ftp/file schemes', () => {
+    expect(extractFirstUrl('example.com is nice')).toBeNull();
+    expect(extractFirstUrl('ftp://example.com')).toBeNull();
   });
 
   it('defaults label to null when omitted', () => {

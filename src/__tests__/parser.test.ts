@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { DateTime } from 'luxon';
 import type { ParsedTimestamp } from '../types';
 import { extractTimestamps, MAX_EXTRACT } from '../lib/parser';
 
@@ -117,6 +118,74 @@ describe('parseSingle', () => {
     expect(cst).not.toBeNull();
     expect(cst!.iso).toBe('2026-04-04T15:20:50.000Z');
     expect(cst!.ambiguous).toBe(true);
+  });
+
+  describe('date-less time', () => {
+    // These tests compute expected results against "today's UTC date at
+    // parse time" rather than hard-coding a date, so they remain green as
+    // the calendar advances. Date math stays ISO and small enough to trust.
+    const todayIsoDate = DateTime.utc().toISODate();
+
+    it('parses "HH:mm" as today at that UTC wall-clock, ambiguous', () => {
+      const result = parseSingle('15:20');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe(`${todayIsoDate}T15:20:00.000Z`);
+      expect(result!.ambiguous).toBe(true);
+    });
+
+    it('parses "HH:mm:ss" with seconds', () => {
+      const result = parseSingle('15:20:30');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe(`${todayIsoDate}T15:20:30.000Z`);
+      expect(result!.ambiguous).toBe(true);
+    });
+
+    it('parses "HH:mm:ss.fff" preserving fractional seconds', () => {
+      const result = parseSingle('15:20:30.250');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe(`${todayIsoDate}T15:20:30.250Z`);
+      expect(result!.ambiguous).toBe(true);
+    });
+
+    it('resolves a trailing timezone abbreviation', () => {
+      // 15:20 EST = 20:20 UTC (EST = -5).
+      const result = parseSingle('15:20 EST');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe(`${todayIsoDate}T20:20:00.000Z`);
+      expect(result!.ambiguous).toBe(false);
+    });
+
+    it('treats an unrecognized trailing token as ambiguous', () => {
+      const result = parseSingle('15:20 FOO');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe(`${todayIsoDate}T15:20:00.000Z`);
+      expect(result!.ambiguous).toBe(true);
+    });
+
+    it('does not match bare times embedded in log prose', () => {
+      // Regression guard: the pattern must be line-anchored so it can't
+      // accidentally fire on numbers that happen to look time-shaped.
+      expect(parseSingle('request took 15:20 to complete')).toBeNull();
+      expect(parseSingle('retry after 30:00')).toBeNull();
+    });
+
+    it('defers to the log pattern when a full date-time is present', () => {
+      // The log pattern claims the range first, so the date-less pattern
+      // never fires on this input — the expected date is 2026-04-04, not
+      // today.
+      const result = parseSingle('2026-04-04 15:20:00');
+      expect(result).not.toBeNull();
+      expect(result!.iso).toBe('2026-04-04T15:20:00.000Z');
+    });
+
+    it('extracts a bare time on its own line alongside a full date-time', () => {
+      const input = ['2026-04-04T10:00:00Z first', '16:00 EST'].join('\n');
+      const { timestamps } = extractTimestamps(input);
+      expect(timestamps).toHaveLength(2);
+      const isos = timestamps.map((r) => r.iso);
+      expect(isos).toContain('2026-04-04T10:00:00.000Z');
+      expect(isos).toContain(`${todayIsoDate}T21:00:00.000Z`); // 16:00 EST = 21:00 UTC
+    });
   });
 
   it('parses slash-separated date-time as ambiguous', () => {
@@ -247,9 +316,13 @@ describe('extractTimestamps', () => {
   });
 
   it('caps at MAX_EXTRACT and flags truncated', () => {
-    const lines = Array.from({ length: 100 }, (_, i) =>
-      `2026-04-04T18:02:${String(i % 60).padStart(2, '0')}.000Z line ${i.toString()}`
-    ).join('\n');
+    // Generate MAX_EXTRACT + 50 unique timestamps so the cap is exceeded
+    // regardless of the configured value. Stride by 1s, so 600 of them
+    // span ten minutes — safely within Date's range.
+    const lines = Array.from({ length: MAX_EXTRACT + 50 }, (_, i) => {
+      const iso = new Date(Date.UTC(2026, 3, 4, 0, 0, i)).toISOString();
+      return `${iso} line ${i.toString()}`;
+    }).join('\n');
 
     const { timestamps, truncated } = extractTimestamps(lines);
     expect(timestamps).toHaveLength(MAX_EXTRACT);
