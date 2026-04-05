@@ -9,7 +9,7 @@ import {
   Toast,
 } from '@raycast/api';
 import { showFailureToast, useLocalStorage } from '@raycast/utils';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
@@ -54,31 +54,45 @@ export default function UTCWorkbench() {
 
   const [query, setQuery] = useState('');
   const [parsed, setParsed] = useState<readonly ParsedTimestamp[]>([]);
+  const [parsedTruncated, setParsedTruncated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(() => DateTime.now().toUTC());
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // The nav title shows an HH:mm clock. Ticking every second would force the
+  // parent `<List>` to re-render (and reconcile every row) 60× more often
+  // than the display actually changes, so we align the interval to the next
+  // wall-clock minute boundary and then tick once per minute from there.
   useEffect(() => {
-    timerRef.current = setInterval(() => {
+    function tick() {
       setNow(DateTime.now().toUTC());
-    }, 1000);
+    }
+    const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const timeoutId = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, 60_000);
+    }, msUntilNextMinute);
     return () => {
-      if (timerRef.current !== null) clearInterval(timerRef.current);
+      clearTimeout(timeoutId);
+      if (intervalId !== null) clearInterval(intervalId);
     };
   }, []);
 
   const navTitle = useMemo(() => {
-    const utcTime = now.toFormat('HH:mm:ss');
+    const utcTime = now.toFormat('HH:mm');
     const local = now.toLocal();
-    return `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm:ss')} (${local.toFormat('ZZ')})`;
+    return `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm')} (${local.toFormat('ZZ')})`;
   }, [now]);
 
   useEffect(() => {
     if (!query.trim()) {
       setParsed([]);
+      setParsedTruncated(false);
       return;
     }
-    setParsed(extractTimestamps(query));
+    const { timestamps, truncated } = extractTimestamps(query);
+    setParsed(timestamps);
+    setParsedTruncated(truncated);
   }, [query]);
 
   function resolveTimezone(index: number, zone: string) {
@@ -91,16 +105,30 @@ export default function UTCWorkbench() {
     setParsed((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
+  // Content-derived IDs for parsed rows so mid-query edits don't relocate
+  // selection onto an unrelated timestamp. The per-index suffix is a
+  // tiebreaker for the (rare) case where the same timestamp + data appears
+  // twice in a single paste. Zipped with the parsed result here so the
+  // render loop never has to line up two parallel arrays by index.
+  const parsedRows = useMemo(
+    () =>
+      parsed.map((result, i) => ({
+        id: `parsed-${result.timestamp.toString()}-${hashString(result.data)}-${i.toString()}`,
+        result,
+      })),
+    [parsed]
+  );
+
   const timestampById = useMemo(() => {
     const map = new Map<string, number>();
-    parsed.forEach((r, i) => {
-      map.set(`parsed-${i.toString()}`, r.timestamp);
-    });
-    events.forEach((e) => {
-      map.set(`event-${e.id}`, e.timestamp);
-    });
+    for (const { id, result } of parsedRows) {
+      map.set(id, result.timestamp);
+    }
+    for (const event of events) {
+      map.set(`event-${event.id}`, event.timestamp);
+    }
     return map;
-  }, [parsed, events]);
+  }, [parsedRows, events]);
 
   const selectedTimestamp =
     selectedId !== null ? (timestampById.get(selectedId) ?? null) : null;
@@ -295,9 +323,15 @@ export default function UTCWorkbench() {
       }
     >
       {hasParsed ? (
-        <List.Section title="Parsed" subtitle={`${parsed.length.toString()} found`}>
-          {parsed.map((r, i) => {
-            const itemId = `parsed-${i.toString()}`;
+        <List.Section
+          title="Parsed"
+          subtitle={
+            parsedTruncated
+              ? `${parsed.length.toString()} shown — input has more, refine to see the rest`
+              : `${parsed.length.toString()} found`
+          }
+        >
+          {parsedRows.map(({ id: itemId, result: r }, i) => {
             const offset = offsetFrom(r.timestamp, itemId);
             const subtitle = r.ambiguous ? 'No timezone — select one' : offset;
             return (
@@ -450,7 +484,7 @@ export default function UTCWorkbench() {
       {eventsByDate.map((group) => (
         <List.Section
           key={group.date}
-          title={group.date}
+          title={`${group.date} UTC`}
           subtitle={`${group.events.length.toString()} event${group.events.length === 1 ? '' : 's'}`}
         >
           {group.events.map((event) => {
@@ -591,6 +625,18 @@ export default function UTCWorkbench() {
 function trimOrNull(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+/**
+ * djb2 hash of a string, rendered as base-36. Used only to build stable
+ * Raycast list item IDs for parsed rows — not cryptographic.
+ */
+function hashString(value: string): string {
+  let h = 5381;
+  for (let i = 0; i < value.length; i++) {
+    h = ((h << 5) + h + value.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
 }
 
 /**

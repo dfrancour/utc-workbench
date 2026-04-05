@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { extractTimestamps, parseSingle } from '../lib/parser';
+import type { ParsedTimestamp } from '../types';
+import { extractTimestamps, MAX_EXTRACT } from '../lib/parser';
+
+/**
+ * Local test helper: extract and return the first timestamp, or null.
+ * The library itself doesn't expose a single-string API because the
+ * component only consumes the multi-match form; these tests predate that
+ * decision and are easier to read in single-string style.
+ */
+function parseSingle(input: string): ParsedTimestamp | null {
+  const { timestamps } = extractTimestamps(input.trim());
+  return timestamps[0] ?? null;
+}
 
 describe('parseSingle', () => {
   it('parses ISO8601 with Z suffix', () => {
@@ -69,6 +81,42 @@ describe('parseSingle', () => {
     expect(result).not.toBeNull();
     expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
     expect(result!.ambiguous).toBe(true);
+  });
+
+  it('resolves recognized timezone abbreviations to their offset', () => {
+    // PST = UTC-8, so 15:20:50 PST → 23:20:50 UTC.
+    const pst = parseSingle('2026-04-04 15:20:50 PST');
+    expect(pst).not.toBeNull();
+    expect(pst!.iso).toBe('2026-04-04T23:20:50.000Z');
+    expect(pst!.ambiguous).toBe(false);
+
+    // EDT = UTC-4, fractional seconds preserved through the offset math.
+    const edt = parseSingle('2026-04-04 10:15:30.250 EDT');
+    expect(edt).not.toBeNull();
+    expect(edt!.iso).toBe('2026-04-04T14:15:30.250Z');
+    expect(edt!.ambiguous).toBe(false);
+
+    // CEST = UTC+2.
+    const cest = parseSingle('2026-04-04 18:00:00 CEST');
+    expect(cest).not.toBeNull();
+    expect(cest!.iso).toBe('2026-04-04T16:00:00.000Z');
+    expect(cest!.ambiguous).toBe(false);
+
+    // JST = UTC+9.
+    const jst = parseSingle('2026-04-04 08:00:00 JST');
+    expect(jst).not.toBeNull();
+    expect(jst!.iso).toBe('2026-04-03T23:00:00.000Z');
+    expect(jst!.ambiguous).toBe(false);
+  });
+
+  it('treats regionally ambiguous abbreviations as unresolved', () => {
+    // CST = US Central OR China Standard — deliberately omitted from the
+    // lookup so the user picks. Falls through to the strip-and-ambiguous
+    // path, which means the timestamp is still recognized but flagged.
+    const cst = parseSingle('2026-04-04 15:20:50 CST');
+    expect(cst).not.toBeNull();
+    expect(cst!.iso).toBe('2026-04-04T15:20:50.000Z');
+    expect(cst!.ambiguous).toBe(true);
   });
 
   it('parses slash-separated date-time as ambiguous', () => {
@@ -184,31 +232,43 @@ describe('extractTimestamps', () => {
       '2026-04-04T18:02:35.001Z WARN cache miss for key=abc',
     ].join('\n');
 
-    const results = extractTimestamps(input);
-    expect(results).toHaveLength(3);
-    expect(results[0]!.iso).toBe('2026-04-04T18:02:31.123Z');
-    expect(results[1]!.iso).toBe('2026-04-04T18:02:33.500Z');
-    expect(results[2]!.iso).toBe('2026-04-04T18:02:35.001Z');
+    const { timestamps, truncated } = extractTimestamps(input);
+    expect(timestamps).toHaveLength(3);
+    expect(truncated).toBe(false);
+    expect(timestamps[0]!.iso).toBe('2026-04-04T18:02:31.123Z');
+    expect(timestamps[1]!.iso).toBe('2026-04-04T18:02:33.500Z');
+    expect(timestamps[2]!.iso).toBe('2026-04-04T18:02:35.001Z');
   });
 
   it('captures the full source line as data', () => {
     const input = '2026-04-04T18:02:31.123Z ERROR something broke';
-    const results = extractTimestamps(input);
-    expect(results[0]!.data).toBe(input);
+    const { timestamps } = extractTimestamps(input);
+    expect(timestamps[0]!.data).toBe(input);
   });
 
-  it('respects MAX_EXTRACT limit', () => {
+  it('caps at MAX_EXTRACT and flags truncated', () => {
     const lines = Array.from({ length: 100 }, (_, i) =>
       `2026-04-04T18:02:${String(i % 60).padStart(2, '0')}.000Z line ${i.toString()}`
     ).join('\n');
 
-    const results = extractTimestamps(lines);
-    expect(results.length).toBeLessThanOrEqual(50);
+    const { timestamps, truncated } = extractTimestamps(lines);
+    expect(timestamps).toHaveLength(MAX_EXTRACT);
+    expect(truncated).toBe(true);
   });
 
-  it('returns empty array for no timestamps', () => {
-    expect(extractTimestamps('no timestamps here')).toHaveLength(0);
-    expect(extractTimestamps('')).toHaveLength(0);
+  it('does not flag truncated when under the cap', () => {
+    const lines = Array.from({ length: 5 }, (_, i) =>
+      `2026-04-04T18:02:${String(i).padStart(2, '0')}.000Z line ${i.toString()}`
+    ).join('\n');
+    const { timestamps, truncated } = extractTimestamps(lines);
+    expect(timestamps).toHaveLength(5);
+    expect(truncated).toBe(false);
+  });
+
+  it('returns empty result for no timestamps', () => {
+    expect(extractTimestamps('no timestamps here').timestamps).toHaveLength(0);
+    expect(extractTimestamps('').timestamps).toHaveLength(0);
+    expect(extractTimestamps('').truncated).toBe(false);
   });
 
   it('does not double-match ISO-with-Z as both ISO and bare-log format', () => {
@@ -216,9 +276,9 @@ describe('extractTimestamps', () => {
     // separator, its substring match (19 chars) of an ISO-with-Z match
     // (20 chars) started colliding with the dedup key. Range-overlap
     // dedup should prevent this.
-    const results = extractTimestamps('2026-04-04T18:02:31Z');
-    expect(results).toHaveLength(1);
-    expect(results[0]!.ambiguous).toBe(false);
+    const { timestamps } = extractTimestamps('2026-04-04T18:02:31Z');
+    expect(timestamps).toHaveLength(1);
+    expect(timestamps[0]!.ambiguous).toBe(false);
   });
 
   it('extracts a mix of formats from one input', () => {
@@ -228,10 +288,10 @@ describe('extractTimestamps', () => {
       '2026/04/05 09:15:00 slash format',
       '1712253751 epoch',
     ].join('\n');
-    const results = extractTimestamps(input);
-    expect(results).toHaveLength(4);
+    const { timestamps } = extractTimestamps(input);
+    expect(timestamps).toHaveLength(4);
     // Results are returned pattern-by-pattern, not in source order.
-    const isos = results.map((r) => r.iso).sort();
+    const isos = timestamps.map((r) => r.iso).sort();
     expect(isos).toContain('2026-04-04T18:02:31.000Z');
     expect(isos).toContain('2026-04-03T15:20:00.000Z');
     expect(isos).toContain('2026-04-05T09:15:00.000Z');

@@ -51,6 +51,68 @@ function normalizeMonthMatch(match: string): string {
 }
 
 /**
+ * Parse a bare `yyyy-MM-dd HH:mm:ss[.u]` wall-clock string as UTC milliseconds.
+ * Used by the log-format branch; the zone is applied by the caller.
+ */
+function parseLogWallClock(body: string): number | null {
+  const withFrac = DateTime.fromFormat(body, 'yyyy-MM-dd HH:mm:ss.u', { zone: 'utc' });
+  if (withFrac.isValid) return withFrac.toMillis();
+  const noFrac = DateTime.fromFormat(body, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
+  return noFrac.isValid ? noFrac.toMillis() : null;
+}
+
+/**
+ * Common timezone abbreviations → fixed offset in minutes from UTC.
+ *
+ * Luxon's `z` format token only matches IANA zone names
+ * (`America/Los_Angeles`), not three/four-letter abbreviations, so we apply
+ * the offset ourselves when the log pattern captures a trailing abbr.
+ *
+ * Only unambiguous abbreviations are included. CST (US Central vs China
+ * Standard), BST (British Summer vs Bangladesh Standard), IST (India vs
+ * Israel vs Irish) resolve differently by region and are deliberately
+ * omitted — they fall through to the ambiguous branch so the user picks.
+ *
+ * DST-paired entries are kept alongside their standard-time counterpart;
+ * matching is purely by the literal token in the source, so a log that
+ * says "EDT" gets -4h regardless of the calendar date.
+ */
+const TIMEZONE_ABBREVIATIONS: Readonly<Record<string, number>> = {
+  // Universal
+  UTC: 0,
+  GMT: 0,
+  Z: 0,
+  // North America
+  EST: -5 * 60,
+  EDT: -4 * 60,
+  CDT: -5 * 60,
+  MST: -7 * 60,
+  MDT: -6 * 60,
+  PST: -8 * 60,
+  PDT: -7 * 60,
+  AKST: -9 * 60,
+  AKDT: -8 * 60,
+  HST: -10 * 60,
+  // Europe
+  WET: 0,
+  WEST: 60,
+  CET: 60,
+  CEST: 2 * 60,
+  EET: 2 * 60,
+  EEST: 3 * 60,
+  // Asia / Pacific
+  JST: 9 * 60,
+  KST: 9 * 60,
+  AEST: 10 * 60,
+  AEDT: 11 * 60,
+  ACST: 9 * 60 + 30,
+  ACDT: 10 * 60 + 30,
+  AWST: 8 * 60,
+  NZST: 12 * 60,
+  NZDT: 13 * 60,
+};
+
+/**
  * Regex patterns for timestamp extraction, ordered by specificity.
  */
 const PATTERNS: readonly {
@@ -110,35 +172,46 @@ const PATTERNS: readonly {
     },
   },
 
-  // Log format: YYYY-MM-DD[ T]HH:mm:ss[.fff] with optional timezone abbreviation.
-  // The `[ T]` separator also catches bare ISO without an explicit zone
-  // (e.g. "2026-04-04T18:02:31"), which is treated as ambiguous.
+  // Log format: YYYY-MM-DD[ T]HH:mm:ss[.fff] with optional trailing uppercase
+  // token. The `[ T]` separator also catches bare ISO without an explicit
+  // zone (e.g. "2026-04-04T18:02:31"), which is treated as ambiguous.
   {
     regex: /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:\s[A-Z]{2,5})?/g,
     parse: (match) => {
-      // Normalize the separator so a single Luxon format covers both variants.
-      const trimmed = match.trim().replace('T', ' ');
+      // Normalize the date/time separator so a single Luxon format covers
+      // both variants. Scoped to the boundary between YYYY-MM-DD and
+      // HH:mm:ss — an unscoped `.replace('T', ' ')` would also mangle
+      // trailing timezone abbreviations like PST/EDT/JST.
+      const trimmed = match.trim().replace(/^(\d{4}-\d{2}-\d{2})T/, '$1 ');
 
-      // Try with timezone abbreviation first — not ambiguous.
-      const withTz = DateTime.fromFormat(trimmed, 'yyyy-MM-dd HH:mm:ss.u z', { zone: 'utc' });
-      if (withTz.isValid) return { epochMs: withTz.toMillis(), ambiguous: false };
+      // The trailing uppercase token (if any) is either a timezone
+      // abbreviation we recognize, or an unrelated word like a log level.
+      // We split once and branch on the lookup.
+      const suffixMatch = /^(.+?)\s+([A-Z]{2,5})$/.exec(trimmed);
+      if (suffixMatch !== null) {
+        const body = suffixMatch[1];
+        const abbr = suffixMatch[2];
+        if (body !== undefined && abbr !== undefined) {
+          const offsetMinutes = TIMEZONE_ABBREVIATIONS[abbr];
+          if (offsetMinutes !== undefined) {
+            const wallMs = parseLogWallClock(body);
+            if (wallMs !== null) {
+              return {
+                epochMs: wallMs - offsetMinutes * 60_000,
+                ambiguous: false,
+              };
+            }
+          }
+          // Known-bad suffix or unrecognized abbr — fall through to the
+          // stripping path below.
+        }
+      }
 
-      const withTzNoFrac = DateTime.fromFormat(trimmed, 'yyyy-MM-dd HH:mm:ss z', { zone: 'utc' });
-      if (withTzNoFrac.isValid) return { epochMs: withTzNoFrac.toMillis(), ambiguous: false };
-
-      // The optional uppercase suffix in the regex may have swallowed a
-      // non-timezone word (e.g. "INFO" from a log level). If tz parsing
-      // failed, strip any trailing uppercase token and retry as ambiguous.
+      // No (known) timezone — strip any trailing uppercase token and
+      // parse the wall-clock as ambiguous UTC so the user can reinterpret.
       const stripped = trimmed.replace(/\s+[A-Z]{2,5}$/, '');
-
-      // No timezone — ambiguous, temporarily assume UTC.
-      const withFrac = DateTime.fromFormat(stripped, 'yyyy-MM-dd HH:mm:ss.u', { zone: 'utc' });
-      if (withFrac.isValid) return { epochMs: withFrac.toMillis(), ambiguous: true };
-
-      const noFrac = DateTime.fromFormat(stripped, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
-      if (noFrac.isValid) return { epochMs: noFrac.toMillis(), ambiguous: true };
-
-      return null;
+      const wallMs = parseLogWallClock(stripped);
+      return wallMs !== null ? { epochMs: wallMs, ambiguous: true } : null;
     },
   },
 
@@ -231,7 +304,17 @@ const PATTERNS: readonly {
 ];
 
 /** Maximum timestamps to extract per ingestion (guardrail) */
-const MAX_EXTRACT = 50;
+export const MAX_EXTRACT = 50;
+
+export type ExtractResult = {
+  readonly timestamps: readonly ParsedTimestamp[];
+  /**
+   * True when extraction stopped because it hit MAX_EXTRACT before
+   * exhausting the input. Callers should surface this so users know
+   * the list they see isn't everything.
+   */
+  readonly truncated: boolean;
+};
 
 /**
  * Parse a single input string and return all detected timestamps.
@@ -242,22 +325,20 @@ const MAX_EXTRACT = 50;
  * re-match any position inside it. This is what keeps e.g. the relaxed log
  * pattern from double-reporting the prefix of an ISO8601-with-Z match.
  */
-export function extractTimestamps(input: string): readonly ParsedTimestamp[] {
+export function extractTimestamps(input: string): ExtractResult {
   const results: ParsedTimestamp[] = [];
   const claimedRanges: { start: number; end: number }[] = [];
+  let truncated = false;
 
   function overlapsClaimed(start: number, end: number): boolean {
     return claimedRanges.some((r) => start < r.end && end > r.start);
   }
 
-  for (const { regex, parse } of PATTERNS) {
-    if (results.length >= MAX_EXTRACT) break;
+  outer: for (const { regex, parse } of PATTERNS) {
     regex.lastIndex = 0;
 
     let match: RegExpExecArray | null;
     while ((match = regex.exec(input)) !== null) {
-      if (results.length >= MAX_EXTRACT) break;
-
       const start = match.index;
       const end = start + match[0].length;
       if (overlapsClaimed(start, end)) continue;
@@ -276,17 +357,14 @@ export function extractTimestamps(input: string): readonly ParsedTimestamp[] {
         label: null,
         url: null,
       });
+
+      if (results.length >= MAX_EXTRACT) {
+        truncated = true;
+        break outer;
+      }
     }
   }
 
-  return results;
+  return { timestamps: results, truncated };
 }
 
-/**
- * Attempt to parse a single timestamp string.
- * Returns the parsed result or null if no timestamp is found.
- */
-export function parseSingle(input: string): ParsedTimestamp | null {
-  const results = extractTimestamps(input.trim());
-  return results[0] ?? null;
-}
