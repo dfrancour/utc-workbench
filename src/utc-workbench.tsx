@@ -401,6 +401,27 @@ export default function UTCWorkbench() {
     [events]
   );
 
+  const timelineCsv = useMemo(() => {
+    if (events.length === 0) return '';
+    const escapeCsvField = (v: string) => {
+      if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+      return v;
+    };
+    const header = 'UTC,Delta,Event,Link';
+    const rows = events.map((e, i) => {
+      const prev = events[i - 1];
+      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '';
+      const labelPrefix = e.label ? `[${e.label}] ` : '';
+      return [
+        escapeCsvField(e.iso),
+        escapeCsvField(delta),
+        escapeCsvField(labelPrefix + e.data),
+        escapeCsvField(e.url || ''),
+      ].join(',');
+    });
+    return [header, ...rows].join('\n');
+  }, [events]);
+
   const hasParsed = parsed.length > 0;
 
   // Shared "Session" ActionPanel section — rendered on the top-level List
@@ -457,12 +478,17 @@ export default function UTCWorkbench() {
               <Action.CopyToClipboard
                 title="Copy Timeline as Markdown"
                 content={timelineMarkdown}
-                shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
+                shortcut={{ modifiers: ['cmd', 'shift'], key: 'm' }}
               />
               <Action.CopyToClipboard
                 title="Copy Timeline as JSON"
                 content={timelineJson}
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+              />
+              <Action.CopyToClipboard
+                title="Copy Timeline as CSV"
+                content={timelineCsv}
+                shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
               />
             </ActionPanel.Section>
           ) : null}
@@ -787,12 +813,17 @@ export default function UTCWorkbench() {
                       <Action.CopyToClipboard
                         title="Copy Timeline as Markdown"
                         content={timelineMarkdown}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
+                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'm' }}
                       />
                       <Action.CopyToClipboard
                         title="Copy Timeline as JSON"
                         content={timelineJson}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+                      />
+                      <Action.CopyToClipboard
+                        title="Copy Timeline as CSV"
+                        content={timelineCsv}
+                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
                       />
                     </ActionPanel.Section>
                     <ActionPanel.Section title="New">
