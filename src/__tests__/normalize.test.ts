@@ -6,7 +6,7 @@ describe('normalize', () => {
     const result = normalize(1775325751123, 'raw text');
     expect(result.iso).toBe('2026-04-04T18:02:31.123Z');
     expect(result.timestamp).toBe(1775325751123);
-    expect(result.note).toBe('raw text');
+    expect(result.data).toBe('raw text');
   });
 });
 
@@ -16,6 +16,8 @@ describe('reinterpret', () => {
     const original = {
       ...normalize(1775325751000, 'raw'),
       ambiguous: true,
+      label: null,
+      url: null,
     };
 
     // Reinterpret as America/New_York (EDT, UTC-4 on this date)
@@ -29,6 +31,8 @@ describe('reinterpret', () => {
     const original = {
       ...normalize(1775325751000, 'raw'),
       ambiguous: true,
+      label: null,
+      url: null,
     };
     const result = reinterpret(original, 'utc');
     expect(result.iso).toBe(original.iso);
@@ -36,13 +40,15 @@ describe('reinterpret', () => {
     expect(result.ambiguous).toBe(false);
   });
 
-  it('preserves note across reinterpretation', () => {
+  it('preserves data across reinterpretation', () => {
     const original = {
       ...normalize(1775325751000, 'original log line'),
       ambiguous: true,
+      label: null,
+      url: null,
     };
     const result = reinterpret(original, 'America/Los_Angeles');
-    expect(result.note).toBe('original log line');
+    expect(result.data).toBe('original log line');
   });
 
   it('applies the correct offset across a DST boundary', () => {
@@ -52,14 +58,14 @@ describe('reinterpret', () => {
     // New York should add 5h in winter, 4h in summer.
     const winterUtc = Date.UTC(2026, 0, 15, 12, 0, 0);
     const winter = reinterpret(
-      { ...normalize(winterUtc, 'w'), ambiguous: true },
+      { ...normalize(winterUtc, 'w'), ambiguous: true, label: null, url: null },
       'America/New_York'
     );
     expect(winter.iso).toBe('2026-01-15T17:00:00.000Z');
 
     const summerUtc = Date.UTC(2026, 6, 15, 12, 0, 0);
     const summer = reinterpret(
-      { ...normalize(summerUtc, 's'), ambiguous: true },
+      { ...normalize(summerUtc, 's'), ambiguous: true, label: null, url: null },
       'America/New_York'
     );
     expect(summer.iso).toBe('2026-07-15T16:00:00.000Z');

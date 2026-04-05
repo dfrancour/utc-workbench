@@ -62,6 +62,15 @@ describe('parseSingle', () => {
     expect(result!.ambiguous).toBe(true);
   });
 
+  it('parses log line with uppercase level word after timestamp as ambiguous', () => {
+    // Regression: the optional tz-abbreviation suffix in the log regex
+    // used to swallow " INFO" and fail both tz and non-tz parse paths.
+    const result = parseSingle('2026-04-03 15:20:50 INFO: Cloning repository');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe('2026-04-03T15:20:50.000Z');
+    expect(result!.ambiguous).toBe(true);
+  });
+
   it('parses slash-separated date-time as ambiguous', () => {
     const result = parseSingle('2026/04/04 18:02:31');
     expect(result).not.toBeNull();
@@ -111,10 +120,10 @@ describe('extractTimestamps', () => {
     expect(results[2]!.iso).toBe('2026-04-04T18:02:35.001Z');
   });
 
-  it('captures the full source line as note', () => {
+  it('captures the full source line as data', () => {
     const input = '2026-04-04T18:02:31.123Z ERROR something broke';
     const results = extractTimestamps(input);
-    expect(results[0]!.note).toBe(input);
+    expect(results[0]!.data).toBe(input);
   });
 
   it('respects MAX_EXTRACT limit', () => {

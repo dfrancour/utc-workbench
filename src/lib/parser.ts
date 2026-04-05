@@ -82,11 +82,16 @@ const PATTERNS: readonly {
       const withTzNoFrac = DateTime.fromFormat(trimmed, 'yyyy-MM-dd HH:mm:ss z', { zone: 'utc' });
       if (withTzNoFrac.isValid) return { epochMs: withTzNoFrac.toMillis(), ambiguous: false };
 
+      // The optional uppercase suffix in the regex may have swallowed a
+      // non-timezone word (e.g. "INFO" from a log level). If tz parsing
+      // failed, strip any trailing uppercase token and retry as ambiguous.
+      const stripped = trimmed.replace(/\s+[A-Z]{2,5}$/, '');
+
       // No timezone — ambiguous, temporarily assume UTC.
-      const withFrac = DateTime.fromFormat(trimmed, 'yyyy-MM-dd HH:mm:ss.u', { zone: 'utc' });
+      const withFrac = DateTime.fromFormat(stripped, 'yyyy-MM-dd HH:mm:ss.u', { zone: 'utc' });
       if (withFrac.isValid) return { epochMs: withFrac.toMillis(), ambiguous: true };
 
-      const noFrac = DateTime.fromFormat(trimmed, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
+      const noFrac = DateTime.fromFormat(stripped, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
       if (noFrac.isValid) return { epochMs: noFrac.toMillis(), ambiguous: true };
 
       return null;
@@ -146,7 +151,7 @@ const MAX_EXTRACT = 50;
 
 /**
  * Parse a single input string and return all detected timestamps.
- * Each match's source line is captured as the initial note.
+ * Each match's source line is captured as the initial data.
  *
  * Deduplication is by character-range overlap: once a span of the input has
  * been claimed by an earlier (more specific) pattern, later patterns can't
@@ -178,12 +183,14 @@ export function extractTimestamps(input: string): readonly ParsedTimestamp[] {
 
       const lineStart = input.lastIndexOf('\n', start) + 1;
       const lineEnd = input.indexOf('\n', start);
-      const note = input.slice(lineStart, lineEnd === -1 ? undefined : lineEnd).trim();
+      const data = input.slice(lineStart, lineEnd === -1 ? undefined : lineEnd).trim();
 
       claimedRanges.push({ start, end });
       results.push({
-        ...normalize(result.epochMs, note),
+        ...normalize(result.epochMs, data),
         ambiguous: result.ambiguous,
+        label: null,
+        url: null,
       });
     }
   }

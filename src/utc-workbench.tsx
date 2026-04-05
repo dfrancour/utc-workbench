@@ -9,7 +9,7 @@ import {
   Toast,
 } from '@raycast/api';
 import { showFailureToast, useLocalStorage } from '@raycast/utils';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
@@ -31,7 +31,20 @@ import type { Event, ParsedTimestamp } from './types';
 import { TextInputForm } from './components/TextInputForm';
 import { TimezoneForm } from './components/TimezoneForm';
 import { TimestampDetail } from './components/TimestampDetail';
+import { ManualEventForm } from './components/ManualEventForm';
 
+/**
+ * Unified timestamp scratchpad + curated timeline.
+ *
+ * The single search bar is the parse/add input. When the user types or
+ * pastes, matches appear in a "Parsed" section above the curated timeline,
+ * with actions to pin them. Curated events live below, grouped by UTC date.
+ *
+ * This tool does not offer filtering — Raycast's `List` always renders a
+ * searchbar and always binds Enter to the focused ActionPanel, so a filter
+ * role would collide semantically with the parse role. Users curate rather
+ * than filter.
+ */
 export default function UTCWorkbench() {
   const {
     value: storedEvents,
@@ -40,9 +53,7 @@ export default function UTCWorkbench() {
     isLoading,
   } = useLocalStorage<readonly Event[]>(STORAGE_KEY, []);
 
-  // The `useLocalStorage` store holds events in insertion order. We sort on
-  // read so the invariant ("list is timestamp-ordered") is enforced in a
-  // single place, independent of how writes happen.
+  // Sort invariant enforced on read in one place.
   const events = useMemo(() => sortEvents(storedEvents ?? []), [storedEvents]);
 
   const [query, setQuery] = useState('');
@@ -63,7 +74,8 @@ export default function UTCWorkbench() {
   const utcTime = now.toFormat('HH:mm:ss');
   const localTime = now.toLocal().toFormat('HH:mm:ss');
   const localZone = now.toLocal().toFormat('ZZZZ');
-  const navTitle = `UTC ${utcTime}  ·  ${localZone} ${localTime}`;
+  const localOffset = now.toLocal().toFormat('ZZ');
+  const navTitle = `UTC ${utcTime}  ·  ${localZone} ${localTime} (${localOffset})`;
 
   useEffect(() => {
     if (!query.trim()) {
@@ -77,6 +89,10 @@ export default function UTCWorkbench() {
     setParsed((prev) =>
       prev.map((p, i) => (i === index ? reinterpret(p, zone) : p))
     );
+  }
+
+  function updateParsed(index: number, patch: Partial<ParsedTimestamp>) {
+    setParsed((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
   const timestampById = useMemo(() => {
@@ -99,9 +115,8 @@ export default function UTCWorkbench() {
     return formatDelta(timestamp - selectedTimestamp);
   }
 
-  // Precondition: `events` is sorted by timestamp ascending (sortEvents above
-  // guarantees this). Because of that, entries with the same UTC date are
-  // contiguous, which lets us group in a single pass.
+  // Precondition: `events` is sorted by timestamp ascending, so same-date
+  // entries are contiguous and can be grouped in a single pass.
   const eventsByDate = useMemo(() => {
     const groups: { date: string; events: Event[] }[] = [];
     let currentDate = '';
@@ -126,9 +141,20 @@ export default function UTCWorkbench() {
     return groups;
   }, [events]);
 
-  async function handlePin(result: ParsedTimestamp, label?: string) {
+  async function handlePin(result: ParsedTimestamp) {
     try {
-      await setStoredEvents(addEvent(events, result, trimOrNull(label)));
+      await setStoredEvents(addEvent(events, result, result.label, result.url));
+      setQuery('');
+      await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to pin event' });
+    }
+  }
+
+  async function handleManualPin(parsed: ParsedTimestamp) {
+    try {
+      await setStoredEvents(addEvent(events, parsed, parsed.label, parsed.url));
+      setQuery('');
       await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to pin event' });
@@ -137,11 +163,13 @@ export default function UTCWorkbench() {
 
   async function handlePinAll(label?: string) {
     if (parsed.length === 0) return;
+    const count = parsed.length;
     try {
       await setStoredEvents(addEvents(events, parsed, trimOrNull(label)));
+      setQuery('');
       await showToast({
         style: Toast.Style.Success,
-        title: `Pinned ${parsed.length.toString()} timestamp${parsed.length === 1 ? '' : 's'}`,
+        title: `Pinned ${count.toString()} timestamp${count === 1 ? '' : 's'}`,
       });
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to pin events' });
@@ -172,11 +200,11 @@ export default function UTCWorkbench() {
     }
   }
 
-  async function handleSetNote(id: string, note: string) {
+  async function handleSetData(id: string, data: string) {
     try {
-      await setStoredEvents(updateEvent(events, id, { note }));
+      await setStoredEvents(updateEvent(events, id, { data }));
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to update note' });
+      await showFailureToast(error, { title: 'Failed to update data' });
     }
   }
 
@@ -201,7 +229,7 @@ export default function UTCWorkbench() {
         const prev = events[i - 1];
         const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '---';
         const label = e.label ? `[${e.label}] ` : '';
-        return `${e.iso} | ${e.local} | ${delta} | ${label}${e.note}`;
+        return `${e.iso} | ${e.local} | ${delta} | ${label}${e.data}`;
       })
       .join('\n');
   }
@@ -212,7 +240,7 @@ export default function UTCWorkbench() {
         iso: e.iso,
         label: e.label,
         url: e.url,
-        note: e.note || null,
+        data: e.data || null,
       })),
       null,
       2
@@ -230,9 +258,19 @@ export default function UTCWorkbench() {
       onSelectionChange={(id) => {
         setSelectedId(id ?? null);
       }}
-      searchBarPlaceholder="Paste or type a timestamp..."
+      searchBarPlaceholder="Paste timestamped logs or manually enter with ⌘N"
       filtering={false}
       isShowingDetail
+      actions={
+        <ActionPanel>
+          <Action.Push
+            title="New Manual Event"
+            icon={Icon.PlusCircle}
+            shortcut={{ modifiers: ['cmd'], key: 'n' }}
+            target={<ManualEventForm onSubmit={handleManualPin} />}
+          />
+        </ActionPanel>
+      }
     >
       {hasParsed ? (
         <List.Section title="Parsed" subtitle={`${parsed.length.toString()} found`}>
@@ -245,7 +283,7 @@ export default function UTCWorkbench() {
                 id={itemId}
                 key={itemId}
                 icon={r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass}
-                title={extractTime(r.iso)}
+                title={r.iso}
                 {...(subtitle !== null ? { subtitle } : {})}
                 detail={<TimestampDetail kind="parsed" parsed={r} offset={offset} />}
                 actions={
@@ -262,7 +300,7 @@ export default function UTCWorkbench() {
                         <Action
                           title="Interpret as Local"
                           icon={Icon.Clock}
-                          shortcut={{ modifiers: ['cmd'], key: 't' }}
+                          shortcut={{ modifiers: ['cmd'], key: 'l' }}
                           onAction={() => {
                             resolveTimezone(i, DateTime.local().zoneName);
                           }}
@@ -270,7 +308,7 @@ export default function UTCWorkbench() {
                         <Action.Push
                           title="Select Timezone"
                           icon={Icon.Globe}
-                          shortcut={{ modifiers: ['cmd', 'shift'], key: 't' }}
+                          shortcut={{ modifiers: ['cmd'], key: 't' }}
                           target={
                             <TimezoneForm
                               title={`Timezone for ${extractTime(r.iso)}`}
@@ -289,19 +327,6 @@ export default function UTCWorkbench() {
                         onAction={() => {
                           void handlePin(r);
                         }}
-                      />
-                      <Action.Push
-                        title="Pin with Label"
-                        icon={Icon.Tag}
-                        shortcut={{ modifiers: ['cmd'], key: 'l' }}
-                        target={
-                          <TextInputForm
-                            title={`Label for ${extractTime(r.iso)}`}
-                            fieldTitle="Label"
-                            placeholder="e.g., api-gw, postgres, auth-service"
-                            onSubmit={(label) => handlePin(r, label)}
-                          />
-                        }
                       />
                       {parsed.length > 1 ? (
                         <>
@@ -329,10 +354,72 @@ export default function UTCWorkbench() {
                         </>
                       ) : null}
                     </ActionPanel.Section>
+                    <ActionPanel.Section title="Metadata">
+                      <Action.Push
+                        title={r.label ? 'Edit Label' : 'Add Label'}
+                        icon={Icon.Tag}
+                        shortcut={{ modifiers: ['cmd'], key: 'l' }}
+                        target={
+                          <TextInputForm
+                            title={`Label for ${extractTime(r.iso)}`}
+                            fieldTitle="Label"
+                            placeholder="e.g., api-gw, postgres, auth-service"
+                            initialValue={r.label ?? ''}
+                            onSubmit={(label) => {
+                              updateParsed(i, { label: trimOrNull(label) });
+                            }}
+                          />
+                        }
+                      />
+                      <Action.Push
+                        title={r.url ? 'Edit URL' : 'Add URL'}
+                        icon={Icon.Link}
+                        shortcut={{ modifiers: ['cmd'], key: 'u' }}
+                        target={
+                          <TextInputForm
+                            title={`URL for ${extractTime(r.iso)}`}
+                            fieldTitle="URL"
+                            placeholder="e.g., https://grafana.internal/d/abc123"
+                            initialValue={r.url ?? ''}
+                            onSubmit={(url) => {
+                              updateParsed(i, { url: trimOrNull(url) });
+                            }}
+                          />
+                        }
+                      />
+                      <Action.Push
+                        title="Edit Data"
+                        icon={Icon.Pencil}
+                        shortcut={{ modifiers: ['cmd'], key: 'd' }}
+                        target={
+                          <TextInputForm
+                            title={`Data for ${extractTime(r.iso)}`}
+                            fieldTitle="Data"
+                            placeholder="Log line, annotation, or any context"
+                            initialValue={r.data}
+                            multiline
+                            onSubmit={(data) => {
+                              updateParsed(i, { data });
+                            }}
+                          />
+                        }
+                      />
+                    </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
                       <Action.CopyToClipboard title="Copy ISO" content={r.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={r.local} />
-                      <Action.CopyToClipboard title="Copy Unix" content={formatUnix(r.timestamp)} />
+                      <Action.CopyToClipboard
+                        title="Copy Unix"
+                        content={formatUnix(r.timestamp)}
+                      />
+                    </ActionPanel.Section>
+                    <ActionPanel.Section title="New">
+                      <Action.Push
+                        title="New Manual Event"
+                        icon={Icon.PlusCircle}
+                        shortcut={{ modifiers: ['cmd'], key: 'n' }}
+                        target={<ManualEventForm onSubmit={handleManualPin} />}
+                      />
                     </ActionPanel.Section>
                   </ActionPanel>
                 }
@@ -373,7 +460,9 @@ export default function UTCWorkbench() {
                             fieldTitle="Label"
                             placeholder="e.g., api-gw, postgres, auth-service"
                             initialValue={event.label ?? ''}
-                            onSubmit={(label) => handleRelabel(event.id, trimOrNull(label))}
+                            onSubmit={(label) =>
+                              handleRelabel(event.id, trimOrNull(label))
+                            }
                           />
                         }
                       />
@@ -387,7 +476,24 @@ export default function UTCWorkbench() {
                             fieldTitle="URL"
                             placeholder="e.g., https://grafana.internal/d/abc123"
                             initialValue={event.url ?? ''}
-                            onSubmit={(url) => handleSetUrl(event.id, trimOrNull(url))}
+                            onSubmit={(url) =>
+                              handleSetUrl(event.id, trimOrNull(url))
+                            }
+                          />
+                        }
+                      />
+                      <Action.Push
+                        title="Edit Data"
+                        icon={Icon.Pencil}
+                        shortcut={{ modifiers: ['cmd'], key: 'd' }}
+                        target={
+                          <TextInputForm
+                            title={`Data for ${extractTime(event.iso)}`}
+                            fieldTitle="Data"
+                            placeholder="Log line, annotation, or any context"
+                            initialValue={event.data}
+                            multiline
+                            onSubmit={(data) => handleSetData(event.id, data)}
                           />
                         }
                       />
@@ -398,21 +504,30 @@ export default function UTCWorkbench() {
                           shortcut={{ modifiers: ['cmd', 'shift'], key: 'u' }}
                         />
                       ) : null}
-                      <Action.Push
-                        title="Edit Note"
-                        icon={Icon.Pencil}
-                        shortcut={{ modifiers: ['cmd'], key: 'n' }}
-                        target={
-                          <TextInputForm
-                            title={`Note for ${extractTime(event.iso)}`}
-                            fieldTitle="Note"
-                            placeholder="Log line, annotation, or any context"
-                            initialValue={event.note}
-                            multiline
-                            onSubmit={(note) => handleSetNote(event.id, note)}
-                          />
-                        }
+                    </ActionPanel.Section>
+                    <ActionPanel.Section title="Copy">
+                      <Action.CopyToClipboard title="Copy ISO" content={event.iso} />
+                      <Action.CopyToClipboard title="Copy Data" content={event.data} />
+                      <Action.CopyToClipboard
+                        title="Copy Timeline"
+                        content={copyTimeline()}
+                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
                       />
+                      <Action.CopyToClipboard
+                        title="Export Timeline as JSON"
+                        content={exportTimelineJson()}
+                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+                      />
+                    </ActionPanel.Section>
+                    <ActionPanel.Section title="New">
+                      <Action.Push
+                        title="New Manual Event"
+                        icon={Icon.PlusCircle}
+                        shortcut={{ modifiers: ['cmd'], key: 'n' }}
+                        target={<ManualEventForm onSubmit={handleManualPin} />}
+                      />
+                    </ActionPanel.Section>
+                    <ActionPanel.Section title="Danger">
                       <Action
                         title="Delete Event"
                         icon={Icon.Trash}
@@ -430,20 +545,6 @@ export default function UTCWorkbench() {
                         onAction={() => {
                           void handleClear();
                         }}
-                      />
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy ISO" content={event.iso} />
-                      <Action.CopyToClipboard title="Copy Note" content={event.note} />
-                      <Action.CopyToClipboard
-                        title="Copy Timeline"
-                        content={copyTimeline()}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
-                      />
-                      <Action.CopyToClipboard
-                        title="Export Timeline as JSON"
-                        content={exportTimelineJson()}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
                       />
                     </ActionPanel.Section>
                   </ActionPanel>

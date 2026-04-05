@@ -9,13 +9,15 @@ import {
 } from '../lib/store';
 import type { Event, ParsedTimestamp } from '../types';
 
-function parsed(timestamp: number, note = 'raw'): ParsedTimestamp {
+function parsed(timestamp: number, data = 'raw'): ParsedTimestamp {
   return {
     timestamp,
     iso: new Date(timestamp).toISOString(),
     local: 'irrelevant',
-    note,
+    data,
     ambiguous: false,
+    label: null,
+    url: null,
   };
 }
 
@@ -23,7 +25,7 @@ describe('createEvent', () => {
   it('copies parsed fields and normalizes label', () => {
     const e = createEvent(parsed(1_000, 'line'), 'api-gw');
     expect(e.timestamp).toBe(1_000);
-    expect(e.note).toBe('line');
+    expect(e.data).toBe('line');
     expect(e.label).toBe('api-gw');
     expect(e.url).toBeNull();
   });
@@ -90,8 +92,8 @@ describe('updateEvent', () => {
 
   it('supports multi-field patches', () => {
     const a = createEvent(parsed(1_000));
-    const result = updateEvent([a], a.id, { label: 'db', url: 'https://x', note: 'n' });
-    expect(result[0]).toMatchObject({ label: 'db', url: 'https://x', note: 'n' });
+    const result = updateEvent([a], a.id, { label: 'db', url: 'https://x', data: 'n' });
+    expect(result[0]).toMatchObject({ label: 'db', url: 'https://x', data: 'n' });
   });
 });
 
