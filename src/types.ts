@@ -9,6 +9,36 @@ export type Event = {
   readonly ingestedAt: number;
 };
 
+export type SessionId = string;
+
+/**
+ * A named bundle of pinned events — a coherent timeline for a single
+ * purpose (an incident, an investigation, a debugging run). Exactly one
+ * session is active at any time and the main List view operates on it.
+ */
+export type Session = {
+  readonly id: SessionId;
+  readonly label: string;
+  // epoch ms, or null for a "draft" session that exists structurally
+  // (e.g., created implicitly after deleting the active session) but
+  // has not yet been committed by a user action. Drafts are promoted
+  // to real sessions on first mutation or rename, at which point
+  // createdAt is stamped. See `updateActiveSessionEvents` in
+  // lib/sessions.ts and `use-session-delete.ts` for the motivation.
+  readonly createdAt: number | null;
+  readonly events: readonly Event[];
+};
+
+/**
+ * Top-level storage shape. Invariant: `activeSessionId` is either null
+ * (when `sessions` is empty) or a key that exists in `sessions`. All
+ * transforms in `lib/sessions.ts` preserve this invariant.
+ */
+export type SessionState = {
+  readonly activeSessionId: SessionId | null;
+  readonly sessions: Readonly<Record<SessionId, Session>>;
+};
+
 export type ParsedTimestamp = {
   // Epoch ms. For ambiguous inputs this is a tentative value assuming UTC;
   // once `reinterpret` has run the value is authoritative and `ambiguous`

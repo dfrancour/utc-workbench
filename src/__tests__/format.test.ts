@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import {
-  extractDate,
-  extractTime,
-  formatDelta,
-  formatRelative,
-} from '../lib/format';
+import { extractDate, extractTime, formatDelta, formatRelative } from '../lib/format';
 
 describe('formatDelta', () => {
   it('formats milliseconds', () => {

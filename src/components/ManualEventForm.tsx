@@ -32,13 +32,7 @@ function parseTimeString(input: string): TimeParts | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  const formats = [
-    'H:mm:ss.SSS',
-    'H:mm:ss',
-    'H:mm',
-    'h:mm:ss a',
-    'h:mm a',
-  ];
+  const formats = ['H:mm:ss.SSS', 'H:mm:ss', 'H:mm', 'h:mm:ss a', 'h:mm a'];
 
   for (const fmt of formats) {
     const dt = DateTime.fromFormat(trimmed.toUpperCase(), fmt);
@@ -59,11 +53,7 @@ function parseTimeString(input: string): TimeParts | null {
  * to local midnight of the chosen day) with parsed time parts and a zone
  * mode. Returns epoch ms, or null if the combination is invalid.
  */
-function combineDateAndTime(
-  date: Date,
-  time: TimeParts,
-  mode: ZoneMode
-): number | null {
+function combineDateAndTime(date: Date, time: TimeParts, mode: ZoneMode): number | null {
   // Form.DatePicker Type.Date returns a Date at local midnight. Pull the
   // Y/M/D from the local interpretation — that's what the user picked.
   const localDate = DateTime.fromJSDate(date);
@@ -108,9 +98,7 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
       const utc = DateTime.fromISO(initialEvent.iso, { zone: 'utc' });
       // Drop trailing .000 for a cleaner default, keep fractional seconds
       // otherwise so the user doesn't silently lose precision on save.
-      return utc.millisecond === 0
-        ? utc.toFormat('HH:mm:ss')
-        : utc.toFormat('HH:mm:ss.SSS');
+      return utc.millisecond === 0 ? utc.toFormat('HH:mm:ss') : utc.toFormat('HH:mm:ss.SSS');
     }
     return DateTime.local().toFormat('HH:mm:ss');
   });

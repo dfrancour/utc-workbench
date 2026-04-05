@@ -330,8 +330,9 @@ describe('extractTimestamps', () => {
   });
 
   it('does not flag truncated when under the cap', () => {
-    const lines = Array.from({ length: 5 }, (_, i) =>
-      `2026-04-04T18:02:${String(i).padStart(2, '0')}.000Z line ${i.toString()}`
+    const lines = Array.from(
+      { length: 5 },
+      (_, i) => `2026-04-04T18:02:${String(i).padStart(2, '0')}.000Z line ${i.toString()}`
     ).join('\n');
     const { timestamps, truncated } = extractTimestamps(lines);
     expect(timestamps).toHaveLength(5);

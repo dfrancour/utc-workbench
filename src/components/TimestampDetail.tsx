@@ -27,10 +27,9 @@ const URL_TITLE = '\u2318URL';
 const DATA_TITLE = '\u2318Data';
 const EMPTY = '—';
 
-const HINTS_PARSED =
-  '\u21A9 Pin  \u00B7  \u2318L Label  \u00B7  \u2318U URL  \u00B7  \u2318D Data';
+const HINTS_PARSED = '\u21A9 Pin  \u00B7  \u2318L Label  \u00B7  \u2318U URL  \u00B7  \u2318D Data';
 const HINTS_EVENT =
-  '\u2318R Set Reference  \u00B7  \u2303\u232B Delete Event  \u00B7  \u2303\u21E7\u232B Delete All Events';
+  '\u2318R Set Reference  \u00B7  \u2303\u232B Delete Event  \u00B7  \u2303\u21E7\u232B Delete Session';
 
 export function TimestampDetail(props: TimestampDetailProps) {
   const base = props.kind === 'parsed' ? props.parsed : props.event;
@@ -54,14 +53,8 @@ export function TimestampDetail(props: TimestampDetailProps) {
                 text="↩ UTC      ⌘L Local      ⌘T Pick zone"
               />
               <List.Item.Detail.Metadata.Separator />
-              <List.Item.Detail.Metadata.Label
-                title="UTC"
-                text={`${base.iso}  (tentative)`}
-              />
-              <List.Item.Detail.Metadata.Label
-                title="Local"
-                text={`${base.local}  (tentative)`}
-              />
+              <List.Item.Detail.Metadata.Label title="UTC" text={`${base.iso}  (tentative)`} />
+              <List.Item.Detail.Metadata.Label title="Local" text={`${base.local}  (tentative)`} />
             </>
           ) : (
             <>
@@ -89,18 +82,11 @@ export function TimestampDetail(props: TimestampDetailProps) {
             <List.Item.Detail.Metadata.Label title={LABEL_TITLE} text={EMPTY} />
           )}
           {base.url !== null ? (
-            <List.Item.Detail.Metadata.Link
-              title={URL_TITLE}
-              text={base.url}
-              target={base.url}
-            />
+            <List.Item.Detail.Metadata.Link title={URL_TITLE} text={base.url} target={base.url} />
           ) : (
             <List.Item.Detail.Metadata.Label title={URL_TITLE} text={EMPTY} />
           )}
-          <List.Item.Detail.Metadata.Label
-            title={DATA_TITLE}
-            text={base.data || EMPTY}
-          />
+          <List.Item.Detail.Metadata.Label title={DATA_TITLE} text={base.data || EMPTY} />
           {!ambiguous ? (
             <>
               <List.Item.Detail.Metadata.Separator />

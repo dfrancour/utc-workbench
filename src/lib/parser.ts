@@ -138,8 +138,9 @@ const PATTERNS: readonly {
   {
     regex: /(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})/g,
     parse: (match) => {
-      const m =
-        /^(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})$/.exec(match);
+      const m = /^(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})$/.exec(
+        match
+      );
       if (m === null) return null;
       const [, wallPart, signChar, hh, mm] = m;
       if (
@@ -239,7 +240,8 @@ const PATTERNS: readonly {
   // 16- and 19-digit values exceed Number.MAX_SAFE_INTEGER near present-day
   // timestamps, so we parse via BigInt and divide down to milliseconds.
   {
-    regex: /(?<!\d)\d{19}(?!\d)|(?<!\d)\d{16}(?!\d)|(?<!\d)\d{13}(?!\d)|(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)/g,
+    regex:
+      /(?<!\d)\d{19}(?!\d)|(?<!\d)\d{16}(?!\d)|(?<!\d)\d{13}(?!\d)|(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)/g,
     parse: (match) => {
       if (match.length === 19) {
         // Nanoseconds. Divide by 1_000_000 in BigInt to avoid precision loss.
@@ -272,8 +274,7 @@ const PATTERNS: readonly {
   // Does not collide with the month-name pattern: month-name requires a 4-digit
   // year, which can't appear in the `HH:mm:ss` position syslog expects here.
   {
-    regex:
-      /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b/g,
+    regex: /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b/g,
     parse: (match) => {
       const normalized = match.replace(/\s+/g, ' ');
       const currentYear = DateTime.now().year;
@@ -320,13 +321,10 @@ const PATTERNS: readonly {
   // first — a full "2026-04-04 15:20:00 PST" is picked up by the log
   // pattern and this one never fires on it.
   {
-    regex:
-      /^[ \t]*\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?(?:[ \t]+[A-Z]{2,5})?[ \t]*$/gm,
+    regex: /^[ \t]*\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?(?:[ \t]+[A-Z]{2,5})?[ \t]*$/gm,
     parse: (match) => {
       const parts =
-        /^[ \t]*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?)(?:[ \t]+([A-Z]{2,5}))?[ \t]*$/.exec(
-          match
-        );
+        /^[ \t]*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?)(?:[ \t]+([A-Z]{2,5}))?[ \t]*$/.exec(match);
       if (parts === null) return null;
       const [, time, abbr] = parts;
       if (time === undefined) return null;
@@ -434,4 +432,3 @@ export function extractTimestamps(input: string): ExtractResult {
 
   return { timestamps: results, truncated };
 }
-

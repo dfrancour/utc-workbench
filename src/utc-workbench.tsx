@@ -8,14 +8,13 @@ import {
   showToast,
   Toast,
 } from '@raycast/api';
-import { showFailureToast, useLocalStorage } from '@raycast/utils';
+import { showFailureToast, useCachedState } from '@raycast/utils';
 import { useState, useEffect, useMemo } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
 import { extractDate, extractTime, formatDelta } from './lib/format';
 import {
-  STORAGE_KEY,
   addEvent,
   addEvents,
   removeEvent,
@@ -23,11 +22,21 @@ import {
   sortEvents,
   updateEvent,
 } from './lib/store';
+import {
+  EMPTY_SESSION_STATE,
+  SESSIONS_STORAGE_KEY,
+  createDraftSession,
+  createSession,
+  getActiveSession,
+  updateActiveSessionEvents,
+} from './lib/sessions';
+import { useSessionDelete } from './lib/use-session-delete';
 import type { Event, ParsedTimestamp } from './types';
 import { TextInputForm } from './components/TextInputForm';
 import { TimezoneForm } from './components/TimezoneForm';
 import { TimestampDetail } from './components/TimestampDetail';
 import { ManualEventForm } from './components/ManualEventForm';
+import { SessionPicker } from './components/SessionPicker';
 
 /**
  * Unified timestamp scratchpad + curated timeline.
@@ -42,15 +51,47 @@ import { ManualEventForm } from './components/ManualEventForm';
  * than filter.
  */
 export default function UTCWorkbench() {
-  const {
-    value: storedEvents,
-    setValue: setStoredEvents,
-    removeValue: clearStoredEvents,
-    isLoading,
-  } = useLocalStorage<readonly Event[]>(STORAGE_KEY, []);
+  // Cache-backed state (vs. LocalStorage-backed) because both this
+  // component and `SessionPicker` subscribe to the same key, and only
+  // `useCachedState` propagates writes across hook instances via
+  // `useSyncExternalStore`. With `useLocalStorage`, a write from the
+  // picker would not reach this component's copy until the component
+  // unmounted and remounted — the bug that caused new sessions to
+  // display stale events from the previously active session.
+  const [sessionState, setStoredState] = useCachedState(SESSIONS_STORAGE_KEY, EMPTY_SESSION_STATE);
+  const activeSession = getActiveSession(sessionState);
 
-  // Sort invariant enforced on read in one place.
-  const events = useMemo(() => sortEvents(storedEvents ?? []), [storedEvents]);
+  // Sort invariant enforced on read in one place, sourced from the active
+  // session's events (or empty when no session exists yet).
+  const events = useMemo(() => sortEvents(activeSession?.events ?? []), [activeSession]);
+
+  // Every event-list mutation goes through this wrapper: the existing
+  // store.ts transform (addEvent, removeEvent, etc.) is passed in as a
+  // function over the active session's events, and the wrapper handles
+  // the session-state bookkeeping. Keeps call sites readable and the
+  // session machinery in one place.
+  //
+  // Lazily creates a draft "Untitled Session" if none exists so a
+  // user's first pin (typed paste, manual form, etc.) Just Works
+  // rather than silently no-opping. The draft is promoted to a real
+  // session (createdAt stamped) in the same commit by
+  // `updateActiveSessionEvents`, so the user sees a normal session
+  // timestamped at the moment of their first pin — not at mount time.
+  // They can rename via ⌘S when convenient.
+  //
+  // Uses the functional form of `setStoredState` so `current` is read
+  // from the Cache's ref rather than from the closed-over `sessionState`
+  // at render time. This matters when a mutation handler is invoked
+  // from a pushed component after the state has changed (e.g., a
+  // delete in the picker) — without the functional form, a stale
+  // closure could overwrite the fresh state and "resurrect" deleted
+  // sessions or events.
+  function mutateEvents(updater: (events: readonly Event[]) => readonly Event[]) {
+    setStoredState((current) => {
+      const base = current.activeSessionId === null ? createDraftSession(current) : current;
+      return updateActiveSessionEvents(base, updater);
+    });
+  }
 
   const [query, setQuery] = useState('');
   const [parsed, setParsed] = useState<readonly ParsedTimestamp[]>([]);
@@ -63,6 +104,12 @@ export default function UTCWorkbench() {
   // reference (zero-setup for the common case of a quick comparison).
   const [referenceId, setReferenceId] = useState<string | null>(null);
   const [now, setNow] = useState(() => DateTime.now().toUTC());
+
+  // Mounts the two-phase session-delete effects and returns a function
+  // for this (foregrounded) view's own delete action. Session deletes
+  // from pushed views (SessionPicker) are forwarded here via a shared
+  // cache key. See `use-session-delete.ts` for the full explanation.
+  const deleteSessionSafely = useSessionDelete(sessionState.activeSessionId, setStoredState);
 
   // The nav title shows an HH:mm clock. Ticking every second would force the
   // parent `<List>` to re-render (and reconcile every row) 60× more often
@@ -87,8 +134,10 @@ export default function UTCWorkbench() {
   const navTitle = useMemo(() => {
     const utcTime = now.toFormat('HH:mm');
     const local = now.toLocal();
-    return `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm')} (${local.toFormat('ZZ')})`;
-  }, [now]);
+    const clock = `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm')} (${local.toFormat('ZZ')})`;
+    const session = activeSession ? activeSession.label : 'No Session';
+    return `${clock}  \u00B7  ${session}`;
+  }, [now, activeSession]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -102,9 +151,7 @@ export default function UTCWorkbench() {
   }, [query]);
 
   function resolveTimezone(index: number, zone: string) {
-    setParsed((prev) =>
-      prev.map((p, i) => (i === index ? reinterpret(p, zone) : p))
-    );
+    setParsed((prev) => prev.map((p, i) => (i === index ? reinterpret(p, zone) : p)));
   }
 
   function updateParsed(index: number, patch: Partial<ParsedTimestamp>) {
@@ -140,9 +187,7 @@ export default function UTCWorkbench() {
   // back to null and no deltas are shown anywhere.
   const effectiveReferenceId = referenceId ?? selectedId;
   const referenceTimestamp =
-    effectiveReferenceId !== null
-      ? (timestampById.get(effectiveReferenceId) ?? null)
-      : null;
+    effectiveReferenceId !== null ? (timestampById.get(effectiveReferenceId) ?? null) : null;
 
   // If an explicit reference becomes stale (row no longer exists after a
   // query edit or deletion), clear it so the UI doesn't show stale offsets.
@@ -151,6 +196,14 @@ export default function UTCWorkbench() {
       setReferenceId(null);
     }
   }, [referenceId, timestampById]);
+
+  // Same guard for `selectedId` — keeps downstream delta calculations
+  // and reference-row logic consistent after row removal.
+  useEffect(() => {
+    if (selectedId !== null && !timestampById.has(selectedId)) {
+      setSelectedId(null);
+    }
+  }, [selectedId, timestampById]);
 
   function offsetFrom(timestamp: number, itemId: string): string | null {
     if (referenceTimestamp === null) return null;
@@ -196,7 +249,7 @@ export default function UTCWorkbench() {
 
   async function handlePin(result: ParsedTimestamp) {
     try {
-      await setStoredEvents(addEvent(events, result, result.label, result.url));
+      mutateEvents((current) => addEvent(current, result, result.label, result.url));
       setQuery('');
       await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
     } catch (error) {
@@ -208,7 +261,7 @@ export default function UTCWorkbench() {
     if (parsed.length === 0) return;
     const count = parsed.length;
     try {
-      await setStoredEvents(addEvents(events, parsed, trimOrNull(label)));
+      mutateEvents((current) => addEvents(current, parsed, trimOrNull(label)));
       setQuery('');
       await showToast({
         style: Toast.Style.Success,
@@ -221,7 +274,7 @@ export default function UTCWorkbench() {
 
   async function handleEditEvent(id: string, parsed: ParsedTimestamp) {
     try {
-      await setStoredEvents(replaceEventFields(events, id, parsed));
+      mutateEvents((current) => replaceEventFields(current, id, parsed));
       await showToast({ style: Toast.Style.Success, title: 'Event updated' });
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to update event' });
@@ -230,7 +283,7 @@ export default function UTCWorkbench() {
 
   async function handleRemove(id: string) {
     try {
-      await setStoredEvents(removeEvent(events, id));
+      mutateEvents((current) => removeEvent(current, id));
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to delete event' });
     }
@@ -238,7 +291,7 @@ export default function UTCWorkbench() {
 
   async function handleRelabel(id: string, label: string | null) {
     try {
-      await setStoredEvents(updateEvent(events, id, { label }));
+      mutateEvents((current) => updateEvent(current, id, { label }));
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to update label' });
     }
@@ -246,7 +299,7 @@ export default function UTCWorkbench() {
 
   async function handleSetUrl(id: string, url: string | null) {
     try {
-      await setStoredEvents(updateEvent(events, id, { url }));
+      mutateEvents((current) => updateEvent(current, id, { url }));
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to update URL' });
     }
@@ -257,24 +310,60 @@ export default function UTCWorkbench() {
   // trailing newlines from multi-line paste).
   async function handleSetData(id: string, data: string) {
     try {
-      await setStoredEvents(updateEvent(events, id, { data }));
+      mutateEvents((current) => updateEvent(current, id, { data }));
     } catch (error) {
       await showFailureToast(error, { title: 'Failed to update data' });
     }
   }
 
-  async function handleClear() {
+  async function handleCreateSession(label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: 'Session label required',
+      });
+      return;
+    }
+    try {
+      setStoredState((current) => createSession(current, trimmed));
+      await showToast({
+        style: Toast.Style.Success,
+        title: `Session "${trimmed}" created`,
+      });
+    } catch (error) {
+      await showFailureToast(error, { title: 'Failed to create session' });
+    }
+  }
+
+  async function handleDeleteSession() {
+    const currentId = sessionState.activeSessionId;
+    if (currentId === null) return;
+    const current = sessionState.sessions[currentId];
+    if (current === undefined) return;
+
+    const eventCount = current.events.length;
     const confirmed = await confirmAlert({
-      title: 'Delete All Events',
-      message: 'Permanently delete all pinned events?',
-      primaryAction: { title: 'Delete All Events', style: Alert.ActionStyle.Destructive },
+      title: `Delete "${current.label}"?`,
+      message:
+        eventCount === 0
+          ? 'Delete this empty session?'
+          : `Permanently delete ${eventCount.toString()} event${eventCount === 1 ? '' : 's'} in this session.`,
+      primaryAction: {
+        title: 'Delete Session',
+        style: Alert.ActionStyle.Destructive,
+      },
     });
     if (!confirmed) return;
+
     try {
-      await clearStoredEvents();
-      await showToast({ style: Toast.Style.Success, title: 'All events deleted' });
+      deleteSessionSafely(currentId);
+      await showToast({
+        style: Toast.Style.Success,
+        title: `Session "${current.label}" deleted`,
+      });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to clear events' });
+      await showFailureToast(error, { title: 'Failed to delete session' });
     }
   }
 
@@ -314,9 +403,37 @@ export default function UTCWorkbench() {
 
   const hasParsed = parsed.length > 0;
 
+  // Shared "Session" ActionPanel section — rendered on the top-level List
+  // actions AND on every row, so ⌘S reaches the session picker from
+  // wherever the user currently has focus. Raycast doesn't inherit
+  // top-level actions onto selected rows, so without this the shortcut
+  // silently stops working as soon as anything is pinned.
+  const sessionSection = (
+    <ActionPanel.Section title="Session">
+      <Action.Push
+        title="Sessions"
+        icon={Icon.Folder}
+        shortcut={{ modifiers: ['cmd'], key: 's' }}
+        target={<SessionPicker />}
+      />
+      <Action.Push
+        title="New Session"
+        icon={Icon.PlusCircle}
+        shortcut={{ modifiers: ['cmd', 'shift'], key: 'n' }}
+        target={
+          <TextInputForm
+            title="New Session"
+            fieldTitle="Label"
+            placeholder="e.g., db-outage 2026-04-05"
+            onSubmit={handleCreateSession}
+          />
+        }
+      />
+    </ActionPanel.Section>
+  );
+
   return (
     <List
-      isLoading={isLoading}
       navigationTitle={navTitle}
       searchText={query}
       onSearchTextChange={setQuery}
@@ -334,6 +451,7 @@ export default function UTCWorkbench() {
             shortcut={{ modifiers: ['cmd'], key: 'n' }}
             target={<ManualEventForm onSubmit={handlePin} />}
           />
+          {sessionSection}
           {events.length > 0 ? (
             <ActionPanel.Section title="Timeline">
               <Action.CopyToClipboard
@@ -345,6 +463,19 @@ export default function UTCWorkbench() {
                 title="Copy Timeline as JSON"
                 content={timelineJson}
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+              />
+            </ActionPanel.Section>
+          ) : null}
+          {activeSession !== null ? (
+            <ActionPanel.Section title="Danger">
+              <Action
+                title="Delete Session"
+                icon={Icon.Trash}
+                style={Action.Style.Destructive}
+                shortcut={{ modifiers: ['ctrl', 'shift'], key: 'delete' }}
+                onAction={() => {
+                  void handleDeleteSession();
+                }}
               />
             </ActionPanel.Section>
           ) : null}
@@ -520,9 +651,7 @@ export default function UTCWorkbench() {
                     <ActionPanel.Section title="Copy">
                       <Action.CopyToClipboard title="Copy UTC" content={r.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={r.local} />
-                      {r.url ? (
-                        <Action.CopyToClipboard title="Copy URL" content={r.url} />
-                      ) : null}
+                      {r.url ? <Action.CopyToClipboard title="Copy URL" content={r.url} /> : null}
                     </ActionPanel.Section>
                     <ActionPanel.Section title="New">
                       <Action.Push
@@ -532,6 +661,7 @@ export default function UTCWorkbench() {
                         target={<ManualEventForm onSubmit={handlePin} />}
                       />
                     </ActionPanel.Section>
+                    {sessionSection}
                   </ActionPanel>
                 }
               />
@@ -589,9 +719,7 @@ export default function UTCWorkbench() {
                             fieldTitle="Label"
                             placeholder="e.g., api-gw, postgres, auth-service"
                             initialValue={event.label ?? ''}
-                            onSubmit={(label) =>
-                              handleRelabel(event.id, trimOrNull(label))
-                            }
+                            onSubmit={(label) => handleRelabel(event.id, trimOrNull(label))}
                           />
                         }
                       />
@@ -605,9 +733,7 @@ export default function UTCWorkbench() {
                             fieldTitle="URL"
                             placeholder="e.g., https://grafana.internal/d/abc123"
                             initialValue={event.url ?? ''}
-                            onSubmit={(url) =>
-                              handleSetUrl(event.id, trimOrNull(url))
-                            }
+                            onSubmit={(url) => handleSetUrl(event.id, trimOrNull(url))}
                           />
                         }
                       />
@@ -677,6 +803,7 @@ export default function UTCWorkbench() {
                         target={<ManualEventForm onSubmit={handlePin} />}
                       />
                     </ActionPanel.Section>
+                    {sessionSection}
                     <ActionPanel.Section title="Danger">
                       <Action
                         title="Delete Event"
@@ -688,12 +815,12 @@ export default function UTCWorkbench() {
                         }}
                       />
                       <Action
-                        title="Delete All Events"
+                        title="Delete Session"
                         icon={Icon.Trash}
                         style={Action.Style.Destructive}
                         shortcut={{ modifiers: ['ctrl', 'shift'], key: 'delete' }}
                         onAction={() => {
-                          void handleClear();
+                          void handleDeleteSession();
                         }}
                       />
                     </ActionPanel.Section>

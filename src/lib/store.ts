@@ -8,10 +8,6 @@ import type { Event, ParsedTimestamp } from '../types';
  * testable.
  */
 
-// v2: schema rename `note` → `data`. Bumping the key gives a clean slate
-// instead of forcing migration code through a prototype.
-export const STORAGE_KEY = 'utc-workbench-events-v2';
-
 type EventPatch = Partial<Pick<Event, 'label' | 'url' | 'data'>>;
 
 function generateId(): string {
@@ -79,10 +75,7 @@ export function addEvents(
   // Per-timestamp label (from inline edits) always wins over the bulk label.
   // The bulk label from "Pin All with Label" only fills in items that weren't
   // individually labeled — explicit inline edits are never overwritten.
-  return [
-    ...events,
-    ...timestamps.map((t) => createEvent(t, t.label ?? label, t.url)),
-  ];
+  return [...events, ...timestamps.map((t) => createEvent(t, t.label ?? label, t.url))];
 }
 
 /** Return a new list with a single event patched. No-op if id is not found. */
@@ -120,9 +113,6 @@ export function replaceEventFields(
 }
 
 /** Return a new list with the event removed. */
-export function removeEvent(
-  events: readonly Event[],
-  id: string
-): readonly Event[] {
+export function removeEvent(events: readonly Event[], id: string): readonly Event[] {
   return events.filter((e) => e.id !== id);
 }
