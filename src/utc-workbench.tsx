@@ -186,8 +186,7 @@ export default function UTCWorkbench() {
   // Only show deltas when the user has explicitly set a reference — no
   // implicit selection-follows behavior, which caused confusing shifting
   // offsets when navigating the list.
-  const referenceTimestamp =
-    referenceId !== null ? (timestampById.get(referenceId) ?? null) : null;
+  const referenceTimestamp = referenceId !== null ? (timestampById.get(referenceId) ?? null) : null;
 
   // If an explicit reference becomes stale (row no longer exists after a
   // query edit or deletion), clear it so the UI doesn't show stale offsets.

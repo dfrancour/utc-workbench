@@ -70,10 +70,7 @@ export function TimestampDetail(props: TimestampDetailProps) {
                 </List.Item.Detail.Metadata.TagList>
               ) : props.offset !== null ? (
                 <List.Item.Detail.Metadata.TagList title="Δ from ref">
-                  <List.Item.Detail.Metadata.TagList.Item
-                    text={props.offset}
-                    color={Color.Blue}
-                  />
+                  <List.Item.Detail.Metadata.TagList.Item text={props.offset} color={Color.Blue} />
                 </List.Item.Detail.Metadata.TagList>
               ) : null}
             </>
