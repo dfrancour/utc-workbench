@@ -1,12 +1,13 @@
 {
+  "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "utc-workbench",
   "version": "0.0.1",
   "title": "UTC Workbench",
   "description": "Timestamp interpretation and timeline reconstruction for developer workflows",
   "icon": "icon.png",
   "author": "dfrancour",
+  "categories": ["Developer Tools"],
   "license": "MIT",
-  "packageManager": "pnpm@10.12.1",
   "commands": [
     {
       "name": "utc-workbench",
@@ -21,28 +22,24 @@
     "luxon": "^3.6.1"
   },
   "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
     "@types/luxon": "^3.7.1",
     "@types/node": "22.13.10",
     "@types/react": "19.0.10",
-    "@typescript-eslint/eslint-plugin": "^8.33.0",
-    "@typescript-eslint/parser": "^8.33.0",
-    "eslint": "^9.28.0",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint": "^8.57.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.0",
     "vitest": "^3.2.1"
   },
   "scripts": {
     "build": "ray build --skip-types -e dist -o dist",
     "dev": "ray develop",
-    "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "publish": "npx @raycast/api@latest publish",
+    "prepublishOnly": "echo \"\\n\\nError: Use 'npm run publish' instead.\\n\" && exit 1",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit"

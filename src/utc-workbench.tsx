@@ -486,7 +486,7 @@ export default function UTCWorkbench() {
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
               />
               <Action.CopyToClipboard
-                title="Copy Timeline as CSV"
+                title="Copy Timeline as Csv"
                 content={timelineCsv}
                 shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
               />
@@ -543,7 +543,7 @@ export default function UTCWorkbench() {
                     {r.ambiguous ? (
                       <ActionPanel.Section title="Timezone">
                         <Action
-                          title="Interpret as UTC"
+                          title="Interpret as Utc"
                           icon={Icon.Globe}
                           onAction={() => {
                             resolveTimezone(i, 'utc');
@@ -675,7 +675,7 @@ export default function UTCWorkbench() {
                       />
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy UTC" content={r.iso} />
+                      <Action.CopyToClipboard title="Copy Utc" content={r.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={r.local} />
                       {r.url ? <Action.CopyToClipboard title="Copy URL" content={r.url} /> : null}
                     </ActionPanel.Section>
@@ -804,7 +804,7 @@ export default function UTCWorkbench() {
                       ) : null}
                     </ActionPanel.Section>
                     <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy UTC" content={event.iso} />
+                      <Action.CopyToClipboard title="Copy Utc" content={event.iso} />
                       <Action.CopyToClipboard title="Copy Local" content={event.local} />
                       <Action.CopyToClipboard title="Copy Data" content={event.data} />
                       {event.url ? (
@@ -821,7 +821,7 @@ export default function UTCWorkbench() {
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
                       />
                       <Action.CopyToClipboard
-                        title="Copy Timeline as CSV"
+                        title="Copy Timeline as Csv"
                         content={timelineCsv}
                         shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
                       />
