@@ -183,11 +183,11 @@ export default function UTCWorkbench() {
     return map;
   }, [parsedRows, events]);
 
-  // An explicit reference wins over selection; if neither is valid, falls
-  // back to null and no deltas are shown anywhere.
-  const effectiveReferenceId = referenceId ?? selectedId;
+  // Only show deltas when the user has explicitly set a reference — no
+  // implicit selection-follows behavior, which caused confusing shifting
+  // offsets when navigating the list.
   const referenceTimestamp =
-    effectiveReferenceId !== null ? (timestampById.get(effectiveReferenceId) ?? null) : null;
+    referenceId !== null ? (timestampById.get(referenceId) ?? null) : null;
 
   // If an explicit reference becomes stale (row no longer exists after a
   // query edit or deletion), clear it so the UI doesn't show stale offsets.
@@ -207,7 +207,7 @@ export default function UTCWorkbench() {
 
   function offsetFrom(timestamp: number, itemId: string): string | null {
     if (referenceTimestamp === null) return null;
-    if (itemId === effectiveReferenceId) return null;
+    if (itemId === referenceId) return null;
     return formatDelta(timestamp - referenceTimestamp);
   }
 

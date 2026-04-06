@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Icon, List } from '@raycast/api';
+import { Action, ActionPanel, Color, Icon, List } from '@raycast/api';
 import { DateTime } from 'luxon';
 import { extractTime, trimOrNull } from '../lib/format';
 import type { ParsedTimestamp } from '../types';
@@ -32,11 +32,18 @@ export function ParsedRow({
   sessionActions,
 }: ParsedRowProps) {
   const subtitle = r.ambiguous ? 'No timezone — select one' : r.label;
+  const isRef = referenceId === itemId;
 
   return (
     <List.Item
       id={itemId}
-      icon={r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass}
+      icon={
+        isRef
+          ? { source: Icon.BullsEye, tintColor: Color.Blue }
+          : r.ambiguous
+            ? Icon.Warning
+            : Icon.MagnifyingGlass
+      }
       title={r.iso}
       {...(subtitle !== null ? { subtitle } : {})}
       detail={

@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Icon, List } from '@raycast/api';
+import { Action, ActionPanel, Color, Icon, List } from '@raycast/api';
 import { extractTime, trimOrNull } from '../lib/format';
 import type { Event, ParsedTimestamp } from '../types';
 import { TextInputForm } from './TextInputForm';
@@ -39,11 +39,18 @@ export function EventRow({
   sessionActions,
 }: EventRowProps) {
   const subtitle = event.label;
+  const isRef = referenceId === itemId;
 
   return (
     <List.Item
       id={itemId}
-      icon={event.label ? Icon.Tag : Icon.Clock}
+      icon={
+        isRef
+          ? { source: Icon.BullsEye, tintColor: Color.Blue }
+          : event.label
+            ? Icon.Tag
+            : Icon.Clock
+      }
       title={extractTime(event.iso)}
       {...(subtitle !== null ? { subtitle } : {})}
       detail={
