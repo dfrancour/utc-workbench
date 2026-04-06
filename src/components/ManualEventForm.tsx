@@ -2,6 +2,7 @@ import { Action, ActionPanel, Form, Icon, useNavigation } from '@raycast/api';
 import { useState } from 'react';
 import { DateTime } from 'luxon';
 import { normalize } from '../lib/normalize';
+import { trimOrNull } from '../lib/format';
 import type { Event, ParsedTimestamp } from '../types';
 
 type ManualEventFormProps = {
@@ -201,9 +202,4 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
       />
     </Form>
   );
-}
-
-function trimOrNull(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
 }

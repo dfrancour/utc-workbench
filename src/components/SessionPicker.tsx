@@ -11,7 +11,7 @@ import {
   useNavigation,
 } from '@raycast/api';
 import { showFailureToast, useCachedState } from '@raycast/utils';
-import { DateTime } from 'luxon';
+import { formatRelative } from '../lib/format';
 import type { Session, SessionId } from '../types';
 import {
   EMPTY_SESSION_STATE,
@@ -173,7 +173,8 @@ function SessionRow({
   onCreate,
 }: SessionRowProps) {
   const eventCount = session.events.length;
-  const createdAtRelative = formatRelativeCreated(session.createdAt);
+  const createdAtRelative =
+    session.createdAt !== null ? formatRelative(session.createdAt, { coarse: true }) : 'new';
   const subtitle = `${eventCount.toString()} event${eventCount === 1 ? '' : 's'}`;
 
   return (
@@ -259,30 +260,4 @@ function SessionRow({
       }
     />
   );
-}
-
-/**
- * "2m ago", "3h ago", "yesterday", etc. Intentionally coarse — sessions
- * live for hours to weeks and we just want a rough recency hint in the
- * row accessory. Returns "new" for draft sessions (createdAt === null),
- * which have not yet earned a creation timestamp — see
- * `use-session-delete.ts` and `createDraftSession` in lib/sessions.ts.
- */
-function formatRelativeCreated(epochMs: number | null): string {
-  if (epochMs === null) return 'new';
-  const created = DateTime.fromMillis(epochMs);
-  const now = DateTime.now();
-  const diff = now.diff(created, ['days', 'hours', 'minutes', 'seconds']);
-
-  const days = Math.floor(diff.days);
-  if (days >= 2) return `${days.toString()}d ago`;
-  if (days === 1) return 'yesterday';
-
-  const hours = Math.floor(diff.hours);
-  if (hours >= 1) return `${hours.toString()}h ago`;
-
-  const minutes = Math.floor(diff.minutes);
-  if (minutes >= 1) return `${minutes.toString()}m ago`;
-
-  return 'just now';
 }

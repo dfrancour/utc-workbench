@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { DateTime } from 'luxon';
 import { extractTimestamps } from './lib/parser';
 import { reinterpret } from './lib/normalize';
-import { extractDate, extractTime, formatDelta } from './lib/format';
+import { escapeCsvField, extractDate, formatDelta, trimOrNull } from './lib/format';
 import {
   addEvent,
   addEvents,
@@ -33,10 +33,10 @@ import {
 import { useSessionDelete } from './lib/use-session-delete';
 import type { Event, ParsedTimestamp } from './types';
 import { TextInputForm } from './components/TextInputForm';
-import { TimezoneForm } from './components/TimezoneForm';
-import { TimestampDetail } from './components/TimestampDetail';
 import { ManualEventForm } from './components/ManualEventForm';
 import { SessionPicker } from './components/SessionPicker';
+import { ParsedRow } from './components/ParsedRow';
+import { EventRow } from './components/EventRow';
 
 /**
  * Unified timestamp scratchpad + curated timeline.
@@ -393,7 +393,7 @@ export default function UTCWorkbench() {
           utc: e.iso,
           label: e.label,
           url: e.url,
-          data: e.data || null,
+          data: e.data !== '' ? e.data : null,
         })),
         null,
         2
@@ -403,10 +403,6 @@ export default function UTCWorkbench() {
 
   const timelineCsv = useMemo(() => {
     if (events.length === 0) return '';
-    const escapeCsvField = (v: string) => {
-      if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
-      return v;
-    };
     const header = 'UTC,Delta,Event,Link';
     const rows = events.map((e, i) => {
       const prev = events[i - 1];
@@ -517,182 +513,24 @@ export default function UTCWorkbench() {
               : `${parsed.length.toString()} found`
           }
         >
-          {parsedRows.map(({ id: itemId, result: r }, i) => {
-            const offset = offsetFrom(r.timestamp, itemId);
-            // List subtitle never shows the delta — that lives in the
-            // detail pane. Here we surface the ambiguity warning or the
-            // user's label, whichever is relevant.
-            const subtitle = r.ambiguous ? 'No timezone — select one' : r.label;
-            return (
-              <List.Item
-                id={itemId}
-                key={itemId}
-                icon={r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass}
-                title={r.iso}
-                {...(subtitle !== null ? { subtitle } : {})}
-                detail={
-                  <TimestampDetail
-                    kind="parsed"
-                    parsed={r}
-                    offset={offset}
-                    isReference={referenceId === itemId}
-                  />
-                }
-                actions={
-                  <ActionPanel>
-                    {r.ambiguous ? (
-                      <ActionPanel.Section title="Timezone">
-                        <Action
-                          title="Interpret as Utc"
-                          icon={Icon.Globe}
-                          onAction={() => {
-                            resolveTimezone(i, 'utc');
-                          }}
-                        />
-                        <Action
-                          title="Interpret as Local"
-                          icon={Icon.Clock}
-                          shortcut={{ modifiers: ['cmd'], key: 'l' }}
-                          onAction={() => {
-                            resolveTimezone(i, DateTime.local().zoneName);
-                          }}
-                        />
-                        <Action.Push
-                          title="Select Timezone"
-                          icon={Icon.Globe}
-                          shortcut={{ modifiers: ['cmd'], key: 't' }}
-                          target={
-                            <TimezoneForm
-                              title={`Timezone for ${extractTime(r.iso)}`}
-                              onSubmit={(zone) => {
-                                resolveTimezone(i, zone);
-                              }}
-                            />
-                          }
-                        />
-                      </ActionPanel.Section>
-                    ) : null}
-                    <ActionPanel.Section title="Pin">
-                      <Action
-                        title="Pin to Timeline"
-                        icon={Icon.Pin}
-                        onAction={() => {
-                          void handlePin(r);
-                        }}
-                      />
-                      {parsed.length > 1 ? (
-                        <>
-                          <Action
-                            title="Pin All"
-                            icon={Icon.PlusCircle}
-                            shortcut={{ modifiers: ['cmd', 'shift'], key: 'return' }}
-                            onAction={() => {
-                              void handlePinAll();
-                            }}
-                          />
-                          <Action.Push
-                            title="Pin All with Label"
-                            icon={Icon.Tag}
-                            shortcut={{ modifiers: ['cmd', 'shift'], key: 'l' }}
-                            target={
-                              <TextInputForm
-                                title={`Label for ${parsed.length.toString()} timestamps`}
-                                fieldTitle="Label"
-                                placeholder="e.g., api-gw, postgres, auth-service"
-                                onSubmit={(label) => handlePinAll(label)}
-                              />
-                            }
-                          />
-                        </>
-                      ) : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Compare">
-                      <Action
-                        title="Set as Reference"
-                        icon={Icon.BullsEye}
-                        shortcut={{ modifiers: ['cmd'], key: 'r' }}
-                        onAction={() => {
-                          handleSetReference(itemId);
-                        }}
-                      />
-                      {referenceId !== null ? (
-                        <Action
-                          title="Clear Reference"
-                          icon={Icon.XMarkCircle}
-                          onAction={handleClearReference}
-                        />
-                      ) : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Metadata">
-                      <Action.Push
-                        title={r.label ? 'Edit Label' : 'Add Label'}
-                        icon={Icon.Tag}
-                        shortcut={{ modifiers: ['cmd'], key: 'l' }}
-                        target={
-                          <TextInputForm
-                            title={`Label for ${extractTime(r.iso)}`}
-                            fieldTitle="Label"
-                            placeholder="e.g., api-gw, postgres, auth-service"
-                            initialValue={r.label ?? ''}
-                            onSubmit={(label) => {
-                              updateParsed(i, { label: trimOrNull(label) });
-                            }}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title={r.url ? 'Edit URL' : 'Add URL'}
-                        icon={Icon.Link}
-                        shortcut={{ modifiers: ['cmd'], key: 'u' }}
-                        target={
-                          <TextInputForm
-                            title={`URL for ${extractTime(r.iso)}`}
-                            fieldTitle="URL"
-                            placeholder="e.g., https://grafana.internal/d/abc123"
-                            initialValue={r.url ?? ''}
-                            onSubmit={(url) => {
-                              updateParsed(i, { url: trimOrNull(url) });
-                            }}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title="Edit Data"
-                        icon={Icon.Pencil}
-                        shortcut={{ modifiers: ['cmd'], key: 'd' }}
-                        target={
-                          <TextInputForm
-                            title={`Data for ${extractTime(r.iso)}`}
-                            fieldTitle="Data"
-                            placeholder="Log line, annotation, or any context"
-                            initialValue={r.data}
-                            multiline
-                            onSubmit={(data) => {
-                              updateParsed(i, { data });
-                            }}
-                          />
-                        }
-                      />
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy Utc" content={r.iso} />
-                      <Action.CopyToClipboard title="Copy Local" content={r.local} />
-                      {r.url ? <Action.CopyToClipboard title="Copy URL" content={r.url} /> : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="New">
-                      <Action.Push
-                        title="New Manual Event"
-                        icon={Icon.PlusCircle}
-                        shortcut={{ modifiers: ['cmd'], key: 'n' }}
-                        target={<ManualEventForm onSubmit={handlePin} />}
-                      />
-                    </ActionPanel.Section>
-                    {sessionSection}
-                  </ActionPanel>
-                }
-              />
-            );
-          })}
+          {parsedRows.map(({ id: itemId, result: r }, i) => (
+            <ParsedRow
+              key={itemId}
+              itemId={itemId}
+              result={r}
+              index={i}
+              offset={offsetFrom(r.timestamp, itemId)}
+              referenceId={referenceId}
+              parsedCount={parsed.length}
+              onResolveTimezone={resolveTimezone}
+              onUpdateParsed={updateParsed}
+              onPin={handlePin}
+              onPinAll={handlePinAll}
+              onSetReference={handleSetReference}
+              onClearReference={handleClearReference}
+              sessionActions={sessionSection}
+            />
+          ))}
         </List.Section>
       ) : null}
 
@@ -704,159 +542,26 @@ export default function UTCWorkbench() {
         >
           {group.events.map((event) => {
             const itemId = `event-${event.id}`;
-            const offset = offsetFrom(event.timestamp, itemId);
-            const subtitle = event.label;
             return (
-              <List.Item
-                id={itemId}
+              <EventRow
                 key={itemId}
-                icon={event.label ? Icon.Tag : Icon.Clock}
-                title={extractTime(event.iso)}
-                {...(subtitle !== null ? { subtitle } : {})}
-                detail={
-                  <TimestampDetail
-                    kind="event"
-                    event={event}
-                    offset={offset}
-                    isReference={referenceId === itemId}
-                  />
-                }
-                actions={
-                  <ActionPanel>
-                    <ActionPanel.Section title="Event">
-                      <Action.Push
-                        title="Edit Event"
-                        icon={Icon.Pencil}
-                        shortcut={{ modifiers: ['cmd'], key: 'e' }}
-                        target={
-                          <ManualEventForm
-                            initialEvent={event}
-                            onSubmit={(parsed) => handleEditEvent(event.id, parsed)}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title={event.label ? 'Edit Label' : 'Add Label'}
-                        icon={Icon.Tag}
-                        shortcut={{ modifiers: ['cmd'], key: 'l' }}
-                        target={
-                          <TextInputForm
-                            title={`Label for ${extractTime(event.iso)}`}
-                            fieldTitle="Label"
-                            placeholder="e.g., api-gw, postgres, auth-service"
-                            initialValue={event.label ?? ''}
-                            onSubmit={(label) => handleRelabel(event.id, trimOrNull(label))}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title={event.url ? 'Edit URL' : 'Add URL'}
-                        icon={Icon.Link}
-                        shortcut={{ modifiers: ['cmd'], key: 'u' }}
-                        target={
-                          <TextInputForm
-                            title={`URL for ${extractTime(event.iso)}`}
-                            fieldTitle="URL"
-                            placeholder="e.g., https://grafana.internal/d/abc123"
-                            initialValue={event.url ?? ''}
-                            onSubmit={(url) => handleSetUrl(event.id, trimOrNull(url))}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title="Edit Data"
-                        icon={Icon.Pencil}
-                        shortcut={{ modifiers: ['cmd'], key: 'd' }}
-                        target={
-                          <TextInputForm
-                            title={`Data for ${extractTime(event.iso)}`}
-                            fieldTitle="Data"
-                            placeholder="Log line, annotation, or any context"
-                            initialValue={event.data}
-                            multiline
-                            onSubmit={(data) => handleSetData(event.id, data)}
-                          />
-                        }
-                      />
-                      {event.url ? (
-                        <Action.OpenInBrowser
-                          title="Open URL"
-                          url={event.url}
-                          shortcut={{ modifiers: ['cmd', 'shift'], key: 'u' }}
-                        />
-                      ) : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Compare">
-                      <Action
-                        title="Set as Reference"
-                        icon={Icon.BullsEye}
-                        shortcut={{ modifiers: ['cmd'], key: 'r' }}
-                        onAction={() => {
-                          handleSetReference(itemId);
-                        }}
-                      />
-                      {referenceId !== null ? (
-                        <Action
-                          title="Clear Reference"
-                          icon={Icon.XMarkCircle}
-                          onAction={handleClearReference}
-                        />
-                      ) : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard title="Copy Utc" content={event.iso} />
-                      <Action.CopyToClipboard title="Copy Local" content={event.local} />
-                      <Action.CopyToClipboard title="Copy Data" content={event.data} />
-                      {event.url ? (
-                        <Action.CopyToClipboard title="Copy URL" content={event.url} />
-                      ) : null}
-                      <Action.CopyToClipboard
-                        title="Copy Timeline as Markdown"
-                        content={timelineMarkdown}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'm' }}
-                      />
-                      <Action.CopyToClipboard
-                        title="Copy Timeline as JSON"
-                        content={timelineJson}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
-                      />
-                      <Action.CopyToClipboard
-                        title="Copy Timeline as Csv"
-                        content={timelineCsv}
-                        shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
-                      />
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="New">
-                      <Action.Push
-                        title="New Manual Event"
-                        icon={Icon.PlusCircle}
-                        shortcut={{ modifiers: ['cmd'], key: 'n' }}
-                        target={<ManualEventForm onSubmit={handlePin} />}
-                      />
-                    </ActionPanel.Section>
-                    {sessionSection}
-                    <ActionPanel.Section title="Danger">
-                      <Action
-                        title="Delete Event"
-                        icon={Icon.Trash}
-                        style={Action.Style.Destructive}
-                        shortcut={{ modifiers: ['ctrl'], key: 'delete' }}
-                        onAction={() => {
-                          void handleRemove(event.id);
-                        }}
-                      />
-                      <Action
-                        title="Delete Session"
-                        icon={Icon.Trash}
-                        style={Action.Style.Destructive}
-                        shortcut={{ modifiers: ['ctrl', 'shift'], key: 'delete' }}
-                        onAction={() => {
-                          void handleDeleteSession();
-                        }}
-                      />
-                    </ActionPanel.Section>
-                  </ActionPanel>
-                }
+                event={event}
+                itemId={itemId}
+                offset={offsetFrom(event.timestamp, itemId)}
+                referenceId={referenceId}
+                onEdit={handleEditEvent}
+                onRelabel={handleRelabel}
+                onSetUrl={handleSetUrl}
+                onSetData={handleSetData}
+                onRemove={handleRemove}
+                onDeleteSession={handleDeleteSession}
+                onPin={handlePin}
+                onSetReference={handleSetReference}
+                onClearReference={handleClearReference}
+                timelineMarkdown={timelineMarkdown}
+                timelineJson={timelineJson}
+                timelineCsv={timelineCsv}
+                sessionActions={sessionSection}
               />
             );
           })}
@@ -864,12 +569,6 @@ export default function UTCWorkbench() {
       ))}
     </List>
   );
-}
-
-/** Trim a form-input string; return null for empty/whitespace-only values. */
-function trimOrNull(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
 }
 
 /**

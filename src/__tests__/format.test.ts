@@ -45,6 +45,35 @@ describe('formatRelative', () => {
     expect(formatRelative(FIXED_NOW + 45_000)).toBe('in 45s');
     expect(formatRelative(FIXED_NOW + 5 * 60_000)).toBe('in 5m');
   });
+
+  it('formats day-level past and future', () => {
+    expect(formatRelative(FIXED_NOW - 2 * 86_400_000)).toBe('2d ago');
+    expect(formatRelative(FIXED_NOW - 2 * 86_400_000 - 3 * 3_600_000)).toBe('2d 3h ago');
+    expect(formatRelative(FIXED_NOW + 3 * 86_400_000)).toBe('in 3d');
+  });
+
+  describe('coarse mode', () => {
+    it('returns "just now" for sub-minute deltas', () => {
+      expect(formatRelative(FIXED_NOW - 10_000, { coarse: true })).toBe('just now');
+      expect(formatRelative(FIXED_NOW + 10_000, { coarse: true })).toBe('just now');
+    });
+
+    it('returns single-unit minutes and hours', () => {
+      expect(formatRelative(FIXED_NOW - 5 * 60_000, { coarse: true })).toBe('5m ago');
+      expect(formatRelative(FIXED_NOW - 3_600_000 - 30 * 60_000, { coarse: true })).toBe('1h ago');
+      expect(formatRelative(FIXED_NOW + 7 * 60_000, { coarse: true })).toBe('in 7m');
+    });
+
+    it('returns "yesterday" / "tomorrow" for 1-day offsets', () => {
+      expect(formatRelative(FIXED_NOW - 86_400_000, { coarse: true })).toBe('yesterday');
+      expect(formatRelative(FIXED_NOW + 86_400_000, { coarse: true })).toBe('tomorrow');
+    });
+
+    it('returns day-level for multi-day offsets', () => {
+      expect(formatRelative(FIXED_NOW - 5 * 86_400_000, { coarse: true })).toBe('5d ago');
+      expect(formatRelative(FIXED_NOW + 3 * 86_400_000, { coarse: true })).toBe('in 3d');
+    });
+  });
 });
 
 describe('extractTime', () => {
