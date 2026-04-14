@@ -1,6 +1,6 @@
-import { DateTime } from 'luxon';
-import type { ParsedTimestamp } from '../types';
-import { normalize } from './normalize';
+import { DateTime } from "luxon";
+import type { ParsedTimestamp } from "../types";
+import { normalize } from "./normalize";
 
 type PatternMatch = {
   readonly epochMs: number;
@@ -15,28 +15,28 @@ type PatternMatch = {
  */
 const MONTH_NAME_FORMATS: readonly string[] = [
   // Short month name, 12-hour
-  'LLL d, yyyy, h:mm:ss a',
-  'LLL d, yyyy, h:mm a',
-  'LLL d, yyyy h:mm:ss a',
-  'LLL d, yyyy h:mm a',
+  "LLL d, yyyy, h:mm:ss a",
+  "LLL d, yyyy, h:mm a",
+  "LLL d, yyyy h:mm:ss a",
+  "LLL d, yyyy h:mm a",
   // Short month name, 24-hour
-  'LLL d, yyyy, HH:mm:ss',
-  'LLL d, yyyy, HH:mm',
-  'LLL d, yyyy HH:mm:ss',
-  'LLL d, yyyy HH:mm',
+  "LLL d, yyyy, HH:mm:ss",
+  "LLL d, yyyy, HH:mm",
+  "LLL d, yyyy HH:mm:ss",
+  "LLL d, yyyy HH:mm",
   // Full month name, 12-hour
-  'LLLL d, yyyy, h:mm:ss a',
-  'LLLL d, yyyy, h:mm a',
-  'LLLL d, yyyy h:mm:ss a',
-  'LLLL d, yyyy h:mm a',
+  "LLLL d, yyyy, h:mm:ss a",
+  "LLLL d, yyyy, h:mm a",
+  "LLLL d, yyyy h:mm:ss a",
+  "LLLL d, yyyy h:mm a",
   // Full month name, 24-hour
-  'LLLL d, yyyy, HH:mm:ss',
-  'LLLL d, yyyy, HH:mm',
-  'LLLL d, yyyy HH:mm:ss',
-  'LLLL d, yyyy HH:mm',
+  "LLLL d, yyyy, HH:mm:ss",
+  "LLLL d, yyyy, HH:mm",
+  "LLLL d, yyyy HH:mm:ss",
+  "LLLL d, yyyy HH:mm",
   // Date only
-  'LLL d, yyyy',
-  'LLLL d, yyyy',
+  "LLL d, yyyy",
+  "LLLL d, yyyy",
 ];
 
 /**
@@ -55,9 +55,9 @@ function normalizeMonthMatch(match: string): string {
  * Used by the log-format branch; the zone is applied by the caller.
  */
 function parseLogWallClock(body: string): number | null {
-  const withFrac = DateTime.fromFormat(body, 'yyyy-MM-dd HH:mm:ss.u', { zone: 'utc' });
+  const withFrac = DateTime.fromFormat(body, "yyyy-MM-dd HH:mm:ss.u", { zone: "utc" });
   if (withFrac.isValid) return withFrac.toMillis();
-  const noFrac = DateTime.fromFormat(body, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
+  const noFrac = DateTime.fromFormat(body, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
   return noFrac.isValid ? noFrac.toMillis() : null;
 }
 
@@ -124,7 +124,7 @@ const PATTERNS: readonly {
   {
     regex: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})/g,
     parse: (match) => {
-      const dt = DateTime.fromISO(match, { zone: 'utc' });
+      const dt = DateTime.fromISO(match, { zone: "utc" });
       return dt.isValid ? { epochMs: dt.toMillis(), ambiguous: false } : null;
     },
   },
@@ -138,25 +138,18 @@ const PATTERNS: readonly {
   {
     regex: /(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})/g,
     parse: (match) => {
-      const m = /^(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})$/.exec(
-        match
-      );
+      const m = /^(\d{2}\/[A-Z][a-z]{2}\/\d{4}:\d{2}:\d{2}:\d{2})\s([+-])(\d{2})(\d{2})$/.exec(match);
       if (m === null) return null;
       const [, wallPart, signChar, hh, mm] = m;
-      if (
-        wallPart === undefined ||
-        signChar === undefined ||
-        hh === undefined ||
-        mm === undefined
-      ) {
+      if (wallPart === undefined || signChar === undefined || hh === undefined || mm === undefined) {
         return null;
       }
-      const wall = DateTime.fromFormat(wallPart, 'dd/LLL/yyyy:HH:mm:ss', {
-        zone: 'utc',
-        locale: 'en',
+      const wall = DateTime.fromFormat(wallPart, "dd/LLL/yyyy:HH:mm:ss", {
+        zone: "utc",
+        locale: "en",
       });
       if (!wall.isValid) return null;
-      const sign = signChar === '-' ? 1 : -1; // subtract east-of-UTC to get UTC
+      const sign = signChar === "-" ? 1 : -1; // subtract east-of-UTC to get UTC
       const offsetMinutes = sign * (Number(hh) * 60 + Number(mm));
       return { epochMs: wall.toMillis() + offsetMinutes * 60_000, ambiguous: false };
     },
@@ -183,7 +176,7 @@ const PATTERNS: readonly {
       // both variants. Scoped to the boundary between YYYY-MM-DD and
       // HH:mm:ss — an unscoped `.replace('T', ' ')` would also mangle
       // trailing timezone abbreviations like PST/EDT/JST.
-      const trimmed = match.trim().replace(/^(\d{4}-\d{2}-\d{2})T/, '$1 ');
+      const trimmed = match.trim().replace(/^(\d{4}-\d{2}-\d{2})T/, "$1 ");
 
       // The trailing uppercase token (if any) is either a timezone
       // abbreviation we recognize, or an unrelated word like a log level.
@@ -210,7 +203,7 @@ const PATTERNS: readonly {
 
       // No (known) timezone — strip any trailing uppercase token and
       // parse the wall-clock as ambiguous UTC so the user can reinterpret.
-      const stripped = trimmed.replace(/\s+[A-Z]{2,5}$/, '');
+      const stripped = trimmed.replace(/\s+[A-Z]{2,5}$/, "");
       const wallMs = parseLogWallClock(stripped);
       return wallMs !== null ? { epochMs: wallMs, ambiguous: true } : null;
     },
@@ -220,12 +213,12 @@ const PATTERNS: readonly {
   {
     regex: /\d{4}\/\d{2}\/\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?/g,
     parse: (match) => {
-      const trimmed = match.replace('T', ' ');
+      const trimmed = match.replace("T", " ");
 
-      const withFrac = DateTime.fromFormat(trimmed, 'yyyy/MM/dd HH:mm:ss.u', { zone: 'utc' });
+      const withFrac = DateTime.fromFormat(trimmed, "yyyy/MM/dd HH:mm:ss.u", { zone: "utc" });
       if (withFrac.isValid) return { epochMs: withFrac.toMillis(), ambiguous: true };
 
-      const noFrac = DateTime.fromFormat(trimmed, 'yyyy/MM/dd HH:mm:ss', { zone: 'utc' });
+      const noFrac = DateTime.fromFormat(trimmed, "yyyy/MM/dd HH:mm:ss", { zone: "utc" });
       if (noFrac.isValid) return { epochMs: noFrac.toMillis(), ambiguous: true };
 
       return null;
@@ -240,8 +233,7 @@ const PATTERNS: readonly {
   // 16- and 19-digit values exceed Number.MAX_SAFE_INTEGER near present-day
   // timestamps, so we parse via BigInt and divide down to milliseconds.
   {
-    regex:
-      /(?<!\d)\d{19}(?!\d)|(?<!\d)\d{16}(?!\d)|(?<!\d)\d{13}(?!\d)|(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)/g,
+    regex: /(?<!\d)\d{19}(?!\d)|(?<!\d)\d{16}(?!\d)|(?<!\d)\d{13}(?!\d)|(?<!\d)\d{10}(?:\.\d{1,3})?(?!\d)/g,
     parse: (match) => {
       if (match.length === 19) {
         // Nanoseconds. Divide by 1_000_000 in BigInt to avoid precision loss.
@@ -257,7 +249,7 @@ const PATTERNS: readonly {
       const num = Number(match);
       if (!Number.isFinite(num)) return null;
 
-      if (match.length === 13 && !match.includes('.')) {
+      if (match.length === 13 && !match.includes(".")) {
         return { epochMs: num, ambiguous: false };
       }
 
@@ -276,13 +268,9 @@ const PATTERNS: readonly {
   {
     regex: /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b/g,
     parse: (match) => {
-      const normalized = match.replace(/\s+/g, ' ');
+      const normalized = match.replace(/\s+/g, " ");
       const currentYear = DateTime.now().year;
-      const dt = DateTime.fromFormat(
-        `${currentYear.toString()} ${normalized}`,
-        'yyyy LLL d HH:mm:ss',
-        { zone: 'utc' }
-      );
+      const dt = DateTime.fromFormat(`${currentYear.toString()} ${normalized}`, "yyyy LLL d HH:mm:ss", { zone: "utc" });
       return dt.isValid ? { epochMs: dt.toMillis(), ambiguous: true } : null;
     },
   },
@@ -296,7 +284,7 @@ const PATTERNS: readonly {
     parse: (match) => {
       const normalized = normalizeMonthMatch(match.trim());
       for (const fmt of MONTH_NAME_FORMATS) {
-        const dt = DateTime.fromFormat(normalized, fmt, { zone: 'utc' });
+        const dt = DateTime.fromFormat(normalized, fmt, { zone: "utc" });
         if (dt.isValid) return { epochMs: dt.toMillis(), ambiguous: true };
       }
       return null;
@@ -323,8 +311,7 @@ const PATTERNS: readonly {
   {
     regex: /^[ \t]*\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?(?:[ \t]+[A-Z]{2,5})?[ \t]*$/gm,
     parse: (match) => {
-      const parts =
-        /^[ \t]*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?)(?:[ \t]+([A-Z]{2,5}))?[ \t]*$/.exec(match);
+      const parts = /^[ \t]*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,6})?)(?:[ \t]+([A-Z]{2,5}))?[ \t]*$/.exec(match);
       if (parts === null) return null;
       const [, time, abbr] = parts;
       if (time === undefined) return null;
@@ -332,10 +319,10 @@ const PATTERNS: readonly {
       // Combine the time with today's UTC midnight. We try the most
       // precise format first so fractional seconds are preserved when
       // present.
-      const today = DateTime.utc().startOf('day');
+      const today = DateTime.utc().startOf("day");
       let combined: DateTime | null = null;
-      for (const fmt of ['H:mm:ss.u', 'H:mm:ss', 'H:mm']) {
-        const candidate = DateTime.fromFormat(time, fmt, { zone: 'utc' });
+      for (const fmt of ["H:mm:ss.u", "H:mm:ss", "H:mm"]) {
+        const candidate = DateTime.fromFormat(time, fmt, { zone: "utc" });
         if (candidate.isValid) {
           combined = today.set({
             hour: candidate.hour,
@@ -411,8 +398,8 @@ export function extractTimestamps(input: string): ExtractResult {
       const result = parse(match[0]);
       if (result === null) continue;
 
-      const lineStart = input.lastIndexOf('\n', start) + 1;
-      const lineEnd = input.indexOf('\n', start);
+      const lineStart = input.lastIndexOf("\n", start) + 1;
+      const lineEnd = input.indexOf("\n", start);
       const data = input.slice(lineStart, lineEnd === -1 ? undefined : lineEnd).trim();
 
       claimedRanges.push({ start, end });

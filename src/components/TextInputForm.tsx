@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Form, Icon, useNavigation } from '@raycast/api';
+import { Action, ActionPanel, Form, Icon, useNavigation } from "@raycast/api";
 
 type TextInputFormProps = {
   readonly title: string;
@@ -22,7 +22,7 @@ export function TextInputForm({
   onSubmit,
 }: TextInputFormProps) {
   const { pop } = useNavigation();
-  const defaultValue = initialValue ?? '';
+  const defaultValue = initialValue ?? "";
 
   return (
     <Form
@@ -41,19 +41,9 @@ export function TextInputForm({
       }
     >
       {multiline === true ? (
-        <Form.TextArea
-          id="value"
-          title={fieldTitle}
-          placeholder={placeholder}
-          defaultValue={defaultValue}
-        />
+        <Form.TextArea id="value" title={fieldTitle} placeholder={placeholder} defaultValue={defaultValue} />
       ) : (
-        <Form.TextField
-          id="value"
-          title={fieldTitle}
-          placeholder={placeholder}
-          defaultValue={defaultValue}
-        />
+        <Form.TextField id="value" title={fieldTitle} placeholder={placeholder} defaultValue={defaultValue} />
       )}
     </Form>
   );

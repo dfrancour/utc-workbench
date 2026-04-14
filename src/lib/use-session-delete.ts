@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useCachedState } from '@raycast/utils';
-import type { SessionId, SessionState } from '../types';
-import { createDraftSession, deleteSession } from './sessions';
+import { useEffect, useState } from "react";
+import { useCachedState } from "@raycast/utils";
+import type { SessionId, SessionState } from "../types";
+import { createDraftSession, deleteSession } from "./sessions";
 
 type SessionStateSetter = (updater: (state: SessionState) => SessionState) => void;
 
@@ -11,7 +11,7 @@ type SessionStateSetter = (updater: (state: SessionState) => SessionState) => vo
  * `UTCWorkbench` list), so the actual delete runs while the parent
  * is foregrounded. See the hook comments below.
  */
-const DELETE_REQUEST_CACHE_KEY = 'utc-workbench-pending-session-delete-v1';
+const DELETE_REQUEST_CACHE_KEY = "utc-workbench-pending-session-delete-v1";
 
 /**
  * Short deferral used by `useRequestSessionDelete` to push the cache
@@ -62,10 +62,7 @@ export function useSessionDelete(
   setSessionState: SessionStateSetter
 ): (id: SessionId) => void {
   const [pendingDeleteId, setPendingDeleteId] = useState<SessionId | null>(null);
-  const [deleteRequest, setDeleteRequest] = useCachedState<SessionId | null>(
-    DELETE_REQUEST_CACHE_KEY,
-    null
-  );
+  const [deleteRequest, setDeleteRequest] = useCachedState<SessionId | null>(DELETE_REQUEST_CACHE_KEY, null);
 
   // Phase 2: fires on the render after phase 1 has committed. When
   // `active` has moved off the pending id, the widget has already

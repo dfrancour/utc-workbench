@@ -1,6 +1,6 @@
-import { Action, ActionPanel, Icon } from '@raycast/api';
-import { ManualEventForm } from './ManualEventForm';
-import type { ParsedTimestamp } from '../types';
+import { Action, ActionPanel, Icon } from "@raycast/api";
+import { ManualEventForm } from "./ManualEventForm";
+import type { ParsedTimestamp } from "../types";
 
 /**
  * Props shared by every timeline row (parsed and event). Provides the
@@ -22,13 +22,13 @@ export function CompareActions({
   referenceId,
   onSetReference,
   onClearReference,
-}: Pick<BaseRowProps, 'itemId' | 'referenceId' | 'onSetReference' | 'onClearReference'>) {
+}: Pick<BaseRowProps, "itemId" | "referenceId" | "onSetReference" | "onClearReference">) {
   return (
     <ActionPanel.Section title="Compare">
       <Action
         title="Set as Reference"
         icon={Icon.BullsEye}
-        shortcut={{ modifiers: ['cmd'], key: 'r' }}
+        shortcut={{ modifiers: ["cmd"], key: "r" }}
         onAction={() => {
           onSetReference(itemId);
         }}
@@ -40,13 +40,13 @@ export function CompareActions({
   );
 }
 
-export function NewEventSection({ onPin }: Pick<BaseRowProps, 'onPin'>) {
+export function NewEventSection({ onPin }: Pick<BaseRowProps, "onPin">) {
   return (
     <ActionPanel.Section title="New">
       <Action.Push
         title="New Manual Event"
         icon={Icon.PlusCircle}
-        shortcut={{ modifiers: ['cmd'], key: 'n' }}
+        shortcut={{ modifiers: ["cmd"], key: "n" }}
         target={<ManualEventForm onSubmit={onPin} />}
       />
     </ActionPanel.Section>

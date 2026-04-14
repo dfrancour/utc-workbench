@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import type { Event, ParsedTimestamp } from '../types';
+import { randomUUID } from "node:crypto";
+import type { Event, ParsedTimestamp } from "../types";
 
 /**
  * Pure event-list transforms. Persistence is owned by the component via
@@ -8,7 +8,7 @@ import type { Event, ParsedTimestamp } from '../types';
  * testable.
  */
 
-type EventPatch = Partial<Pick<Event, 'label' | 'url' | 'data'>>;
+type EventPatch = Partial<Pick<Event, "label" | "url" | "data">>;
 
 function generateId(): string {
   return randomUUID();
@@ -30,11 +30,7 @@ export function extractFirstUrl(text: string): string | null {
 }
 
 /** Build a new Event from a parsed timestamp. */
-export function createEvent(
-  parsed: ParsedTimestamp,
-  label?: string | null,
-  url?: string | null
-): Event {
+export function createEvent(parsed: ParsedTimestamp, label?: string | null, url?: string | null): Event {
   // If the caller didn't supply a URL, auto-seed from the source data —
   // log lines often carry Grafana / Sentry / PR links inline and it's
   // annoying to make users copy them into a second field by hand.
@@ -79,11 +75,7 @@ export function addEvents(
 }
 
 /** Return a new list with a single event patched. No-op if id is not found. */
-export function updateEvent(
-  events: readonly Event[],
-  id: string,
-  patch: EventPatch
-): readonly Event[] {
+export function updateEvent(events: readonly Event[], id: string, patch: EventPatch): readonly Event[] {
   return events.map((e) => (e.id === id ? { ...e, ...patch } : e));
 }
 
@@ -92,11 +84,7 @@ export function updateEvent(
  * new ParsedTimestamp. Preserves `id` and `ingestedAt`. Used by the Edit
  * Timestamp flow, which re-uses the ManualEventForm for both create and edit.
  */
-export function replaceEventFields(
-  events: readonly Event[],
-  id: string,
-  parsed: ParsedTimestamp
-): readonly Event[] {
+export function replaceEventFields(events: readonly Event[], id: string, parsed: ParsedTimestamp): readonly Event[] {
   return events.map((e) =>
     e.id === id
       ? {

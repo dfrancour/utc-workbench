@@ -1,9 +1,9 @@
-import { Action, ActionPanel, Form, Icon, useNavigation } from '@raycast/api';
-import { useState } from 'react';
-import { DateTime } from 'luxon';
-import { normalize } from '../lib/normalize';
-import { trimOrNull } from '../lib/format';
-import type { Event, ParsedTimestamp } from '../types';
+import { Action, ActionPanel, Form, Icon, useNavigation } from "@raycast/api";
+import { useState } from "react";
+import { DateTime } from "luxon";
+import { normalize } from "../lib/normalize";
+import { trimOrNull } from "../lib/format";
+import type { Event, ParsedTimestamp } from "../types";
 
 type ManualEventFormProps = {
   readonly onSubmit: (parsed: ParsedTimestamp) => Promise<void> | void;
@@ -13,7 +13,7 @@ type ManualEventFormProps = {
   readonly initialEvent?: Event;
 };
 
-type ZoneMode = 'local' | 'utc';
+type ZoneMode = "local" | "utc";
 
 type TimeParts = {
   readonly hour: number;
@@ -22,7 +22,7 @@ type TimeParts = {
   readonly millisecond: number;
 };
 
-const EMPTY_DASH = '—';
+const EMPTY_DASH = "—";
 
 /**
  * Parse a free-text time string into H/M/S/ms components.
@@ -33,7 +33,7 @@ function parseTimeString(input: string): TimeParts | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  const formats = ['H:mm:ss.SSS', 'H:mm:ss', 'H:mm', 'h:mm:ss a', 'h:mm a'];
+  const formats = ["H:mm:ss.SSS", "H:mm:ss", "H:mm", "h:mm:ss a", "h:mm a"];
 
   for (const fmt of formats) {
     const dt = DateTime.fromFormat(trimmed.toUpperCase(), fmt);
@@ -68,7 +68,7 @@ function combineDateAndTime(date: Date, time: TimeParts, mode: ZoneMode): number
       second: time.second,
       millisecond: time.millisecond,
     },
-    { zone: mode === 'utc' ? 'utc' : 'local' }
+    { zone: mode === "utc" ? "utc" : "local" }
   );
   return combined.isValid ? combined.toMillis() : null;
 }
@@ -84,59 +84,54 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
   // saving without changing the dropdown round-trips to the same timestamp.
   const [pickedDate, setPickedDate] = useState<Date>(() => {
     if (initialEvent !== undefined) {
-      const utc = DateTime.fromISO(initialEvent.iso, { zone: 'utc' });
-      return DateTime.fromObject(
-        { year: utc.year, month: utc.month, day: utc.day },
-        { zone: 'local' }
-      )
-        .startOf('day')
+      const utc = DateTime.fromISO(initialEvent.iso, { zone: "utc" });
+      return DateTime.fromObject({ year: utc.year, month: utc.month, day: utc.day }, { zone: "local" })
+        .startOf("day")
         .toJSDate();
     }
-    return DateTime.local().startOf('day').toJSDate();
+    return DateTime.local().startOf("day").toJSDate();
   });
   const [timeText, setTimeText] = useState<string>(() => {
     if (initialEvent !== undefined) {
-      const utc = DateTime.fromISO(initialEvent.iso, { zone: 'utc' });
+      const utc = DateTime.fromISO(initialEvent.iso, { zone: "utc" });
       // Drop trailing .000 for a cleaner default, keep fractional seconds
       // otherwise so the user doesn't silently lose precision on save.
-      return utc.millisecond === 0 ? utc.toFormat('HH:mm:ss') : utc.toFormat('HH:mm:ss.SSS');
+      return utc.millisecond === 0 ? utc.toFormat("HH:mm:ss") : utc.toFormat("HH:mm:ss.SSS");
     }
-    return DateTime.local().toFormat('HH:mm:ss');
+    return DateTime.local().toFormat("HH:mm:ss");
   });
-  const [zoneMode, setZoneMode] = useState<ZoneMode>(isEdit ? 'utc' : 'local');
+  const [zoneMode, setZoneMode] = useState<ZoneMode>(isEdit ? "utc" : "local");
   const [timeError, setTimeError] = useState<string | undefined>(undefined);
 
   const parsedTime = parseTimeString(timeText);
   const epochMs = parsedTime !== null ? combineDateAndTime(pickedDate, parsedTime, zoneMode) : null;
 
   const utcText =
-    epochMs !== null
-      ? DateTime.fromMillis(epochMs, { zone: 'utc' }).toFormat("yyyy-MM-dd HH:mm:ss 'UTC'")
-      : EMPTY_DASH;
+    epochMs !== null ? DateTime.fromMillis(epochMs, { zone: "utc" }).toFormat("yyyy-MM-dd HH:mm:ss 'UTC'") : EMPTY_DASH;
   const localText =
     epochMs !== null
-      ? DateTime.fromMillis(epochMs, { zone: 'utc' }).toLocal().toFormat('yyyy-MM-dd HH:mm:ss ZZZZ')
+      ? DateTime.fromMillis(epochMs, { zone: "utc" }).toLocal().toFormat("yyyy-MM-dd HH:mm:ss ZZZZ")
       : EMPTY_DASH;
 
   return (
     <Form
-      navigationTitle={isEdit ? 'Edit Event' : 'New Manual Event'}
+      navigationTitle={isEdit ? "Edit Event" : "New Manual Event"}
       actions={
         <ActionPanel>
           <Action.SubmitForm
-            title={isEdit ? 'Save Changes' : 'Pin to Timeline'}
+            title={isEdit ? "Save Changes" : "Pin to Timeline"}
             icon={isEdit ? Icon.Check : Icon.Pin}
             onSubmit={async (values: { label?: string; url?: string; data?: string }) => {
               if (parsedTime === null) {
-                setTimeError('Invalid time (try HH:mm:ss or h:mm AM/PM)');
+                setTimeError("Invalid time (try HH:mm:ss or h:mm AM/PM)");
                 return;
               }
               if (epochMs === null) {
-                setTimeError('Could not combine date and time');
+                setTimeError("Could not combine date and time");
                 return;
               }
               const parsed: ParsedTimestamp = {
-                ...normalize(epochMs, values.data?.trim() ?? ''),
+                ...normalize(epochMs, values.data?.trim() ?? ""),
                 ambiguous: false,
                 label: trimOrNull(values.label),
                 url: trimOrNull(values.url),
@@ -173,7 +168,7 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
         title="Interpret As"
         value={zoneMode}
         onChange={(v) => {
-          setZoneMode(v === 'utc' ? 'utc' : 'local');
+          setZoneMode(v === "utc" ? "utc" : "local");
         }}
       >
         <Form.Dropdown.Item value="local" title="Local" icon={Icon.Clock} />
@@ -186,19 +181,19 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
         id="label"
         title="Label"
         placeholder="e.g., api-gw, postgres, auth-service (optional)"
-        defaultValue={initialEvent?.label ?? ''}
+        defaultValue={initialEvent?.label ?? ""}
       />
       <Form.TextField
         id="url"
         title="URL"
         placeholder="e.g., https://grafana.internal/d/abc123 (optional)"
-        defaultValue={initialEvent?.url ?? ''}
+        defaultValue={initialEvent?.url ?? ""}
       />
       <Form.TextArea
         id="data"
         title="Data"
         placeholder="Log line, annotation, or any context (optional)"
-        defaultValue={initialEvent?.data ?? ''}
+        defaultValue={initialEvent?.data ?? ""}
       />
     </Form>
   );

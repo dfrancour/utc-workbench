@@ -9,10 +9,10 @@ import {
   confirmAlert,
   showToast,
   useNavigation,
-} from '@raycast/api';
-import { showFailureToast, useCachedState } from '@raycast/utils';
-import { formatRelative } from '../lib/format';
-import type { Session, SessionId } from '../types';
+} from "@raycast/api";
+import { showFailureToast, useCachedState } from "@raycast/utils";
+import { formatRelative } from "../lib/format";
+import type { Session, SessionId } from "../types";
 import {
   EMPTY_SESSION_STATE,
   SESSIONS_STORAGE_KEY,
@@ -20,9 +20,9 @@ import {
   listSessions,
   renameSession,
   setActiveSession,
-} from '../lib/sessions';
-import { useRequestSessionDelete } from '../lib/use-session-delete';
-import { TextInputForm } from './TextInputForm';
+} from "../lib/sessions";
+import { useRequestSessionDelete } from "../lib/use-session-delete";
+import { TextInputForm } from "./TextInputForm";
 
 /**
  * List view for managing sessions. Shows all sessions sorted most-recently
@@ -64,7 +64,7 @@ export function SessionPicker() {
       setValue((current) => setActiveSession(current, id));
       pop();
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to switch session' });
+      await showFailureToast(error, { title: "Failed to switch session" });
     }
   }
 
@@ -73,15 +73,15 @@ export function SessionPicker() {
     if (!trimmed) {
       await showToast({
         style: Toast.Style.Failure,
-        title: 'Session label required',
+        title: "Session label required",
       });
       return;
     }
     try {
       setValue((current) => renameSession(current, id, trimmed));
-      await showToast({ style: Toast.Style.Success, title: 'Session renamed' });
+      await showToast({ style: Toast.Style.Success, title: "Session renamed" });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to rename session' });
+      await showFailureToast(error, { title: "Failed to rename session" });
     }
   }
 
@@ -92,9 +92,9 @@ export function SessionPicker() {
       // toast immediately — the actual state mutation happens ~50ms
       // later but is visually instant from the user's perspective.
       requestDeleteSession(id, pop);
-      await showToast({ style: Toast.Style.Success, title: 'Session deleted' });
+      await showToast({ style: Toast.Style.Success, title: "Session deleted" });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to delete session' });
+      await showFailureToast(error, { title: "Failed to delete session" });
     }
   }
 
@@ -103,7 +103,7 @@ export function SessionPicker() {
     if (!trimmed) {
       await showToast({
         style: Toast.Style.Failure,
-        title: 'Session label required',
+        title: "Session label required",
       });
       return;
     }
@@ -114,7 +114,7 @@ export function SessionPicker() {
         title: `Session "${trimmed}" created`,
       });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to create session' });
+      await showFailureToast(error, { title: "Failed to create session" });
     }
   }
 
@@ -127,7 +127,7 @@ export function SessionPicker() {
           <Action.Push
             title="New Session"
             icon={Icon.Folder}
-            shortcut={{ modifiers: ['cmd', 'shift'], key: 'n' }}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
             target={
               <TextInputForm
                 title="New Session"
@@ -164,18 +164,10 @@ type SessionRowProps = {
   readonly onCreate: (label: string) => Promise<void> | void;
 };
 
-function SessionRow({
-  session,
-  isActive,
-  onSwitch,
-  onRename,
-  onDelete,
-  onCreate,
-}: SessionRowProps) {
+function SessionRow({ session, isActive, onSwitch, onRename, onDelete, onCreate }: SessionRowProps) {
   const eventCount = session.events.length;
-  const createdAtRelative =
-    session.createdAt !== null ? formatRelative(session.createdAt, { coarse: true }) : 'new';
-  const subtitle = `${eventCount.toString()} event${eventCount === 1 ? '' : 's'}`;
+  const createdAtRelative = session.createdAt !== null ? formatRelative(session.createdAt, { coarse: true }) : "new";
+  const subtitle = `${eventCount.toString()} event${eventCount === 1 ? "" : "s"}`;
 
   return (
     <List.Item
@@ -209,7 +201,7 @@ function SessionRow({
           <Action.Push
             title="Edit Label"
             icon={Icon.Pencil}
-            shortcut={{ modifiers: ['cmd'], key: 'l' }}
+            shortcut={{ modifiers: ["cmd"], key: "l" }}
             target={
               <TextInputForm
                 title={`Edit label for "${session.label}"`}
@@ -223,7 +215,7 @@ function SessionRow({
           <Action.Push
             title="New Session"
             icon={Icon.Folder}
-            shortcut={{ modifiers: ['cmd', 'shift'], key: 'n' }}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
             target={
               <TextInputForm
                 title="New Session"
@@ -238,14 +230,14 @@ function SessionRow({
               title="Delete Session"
               icon={Icon.Trash}
               style={Action.Style.Destructive}
-              shortcut={{ modifiers: ['ctrl'], key: 'delete' }}
+              shortcut={{ modifiers: ["ctrl"], key: "delete" }}
               onAction={() => {
                 void (async () => {
                   const confirmed = await confirmAlert({
                     title: `Delete "${session.label}"?`,
-                    message: `This permanently deletes ${eventCount.toString()} event${eventCount === 1 ? '' : 's'} in this session.`,
+                    message: `This permanently deletes ${eventCount.toString()} event${eventCount === 1 ? "" : "s"} in this session.`,
                     primaryAction: {
-                      title: 'Delete Session',
+                      title: "Delete Session",
                       style: Alert.ActionStyle.Destructive,
                     },
                   });

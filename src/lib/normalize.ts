@@ -1,20 +1,17 @@
-import { DateTime } from 'luxon';
-import type { ParsedTimestamp } from '../types';
+import { DateTime } from "luxon";
+import type { ParsedTimestamp } from "../types";
 
 /**
  * Normalize an epoch-ms value into a canonical ParsedTimestamp.
  * Does not set `ambiguous`, `label`, or `url` — callers must set those.
  */
-export function normalize(
-  epochMs: number,
-  data: string
-): Omit<ParsedTimestamp, 'ambiguous' | 'label' | 'url'> {
-  const dt = DateTime.fromMillis(epochMs, { zone: 'utc' });
+export function normalize(epochMs: number, data: string): Omit<ParsedTimestamp, "ambiguous" | "label" | "url"> {
+  const dt = DateTime.fromMillis(epochMs, { zone: "utc" });
 
   return {
     timestamp: epochMs,
     iso: dt.toISO() ?? new Date(epochMs).toISOString(),
-    local: dt.toLocal().toFormat('yyyy-MM-dd HH:mm:ss.SSS ZZZZ'),
+    local: dt.toLocal().toFormat("yyyy-MM-dd HH:mm:ss.SSS ZZZZ"),
     data,
   };
 }
@@ -26,7 +23,7 @@ export function normalize(
 export function reinterpret(parsed: ParsedTimestamp, zone: string): ParsedTimestamp {
   // The original epochMs assumed UTC. We need to figure out what the wall-clock time was,
   // then reinterpret that wall-clock time as being in `zone`.
-  const wallClock = DateTime.fromMillis(parsed.timestamp, { zone: 'utc' });
+  const wallClock = DateTime.fromMillis(parsed.timestamp, { zone: "utc" });
   const reinterpreted = DateTime.fromObject(
     {
       year: wallClock.year,

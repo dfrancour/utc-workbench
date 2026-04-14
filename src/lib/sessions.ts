@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import type { Event, Session, SessionId, SessionState } from '../types';
+import { randomUUID } from "node:crypto";
+import type { Event, Session, SessionId, SessionState } from "../types";
 
 /**
  * Pure transforms over `SessionState`. Persistence is owned by the
@@ -18,9 +18,9 @@ import type { Event, Session, SessionId, SessionState } from '../types';
  * point `createdAt` is stamped with `Date.now()`.
  */
 
-const DRAFT_SESSION_LABEL = 'Untitled Session';
+const DRAFT_SESSION_LABEL = "Untitled Session";
 
-export const SESSIONS_STORAGE_KEY = 'utc-workbench-sessions-v3';
+export const SESSIONS_STORAGE_KEY = "utc-workbench-sessions-v3";
 
 export const EMPTY_SESSION_STATE: SessionState = {
   activeSessionId: null,
@@ -76,9 +76,7 @@ function discardActiveDraft(state: SessionState): SessionState {
   const session = state.sessions[state.activeSessionId];
   if (session === undefined || !isDraftSession(session)) return state;
 
-  const remaining = Object.fromEntries(
-    Object.entries(state.sessions).filter(([key]) => key !== state.activeSessionId)
-  );
+  const remaining = Object.fromEntries(Object.entries(state.sessions).filter(([key]) => key !== state.activeSessionId));
   return { activeSessionId: null, sessions: remaining };
 }
 
@@ -171,9 +169,7 @@ export function deleteSession(state: SessionState, id: SessionId): SessionState 
 
   // Immutable filter-to-object rather than `delete` — lint forbids
   // dynamic key deletion, and this form is clearer anyway.
-  const remaining = Object.fromEntries(
-    Object.entries(state.sessions).filter(([key]) => key !== id)
-  );
+  const remaining = Object.fromEntries(Object.entries(state.sessions).filter(([key]) => key !== id));
 
   if (state.activeSessionId === id) {
     return createDraftSession({ activeSessionId: null, sessions: remaining });

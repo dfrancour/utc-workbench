@@ -1,10 +1,10 @@
-import { Action, ActionPanel, Color, Icon, List } from '@raycast/api';
-import { extractTime, trimOrNull } from '../lib/format';
-import type { Event, ParsedTimestamp } from '../types';
-import { TextInputForm } from './TextInputForm';
-import { ManualEventForm } from './ManualEventForm';
-import { TimestampDetail } from './TimestampDetail';
-import { type BaseRowProps, CompareActions, NewEventSection } from './action-sections';
+import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
+import { extractTime, trimOrNull } from "../lib/format";
+import type { Event, ParsedTimestamp } from "../types";
+import { TextInputForm } from "./TextInputForm";
+import { ManualEventForm } from "./ManualEventForm";
+import { TimestampDetail } from "./TimestampDetail";
+import { type BaseRowProps, CompareActions, NewEventSection } from "./action-sections";
 
 type EventRowProps = BaseRowProps & {
   readonly event: Event;
@@ -44,61 +44,43 @@ export function EventRow({
   return (
     <List.Item
       id={itemId}
-      icon={
-        isRef
-          ? { source: Icon.BullsEye, tintColor: Color.Blue }
-          : event.label
-            ? Icon.Tag
-            : Icon.Clock
-      }
+      icon={isRef ? { source: Icon.BullsEye, tintColor: Color.Blue } : event.label ? Icon.Tag : Icon.Clock}
       title={extractTime(event.iso)}
       {...(subtitle !== null ? { subtitle } : {})}
-      detail={
-        <TimestampDetail
-          kind="event"
-          event={event}
-          offset={offset}
-          isReference={referenceId === itemId}
-        />
-      }
+      detail={<TimestampDetail kind="event" event={event} offset={offset} isReference={referenceId === itemId} />}
       actions={
         <ActionPanel>
           <ActionPanel.Section title="Event">
             <Action.Push
               title="Edit Event"
               icon={Icon.Pencil}
-              shortcut={{ modifiers: ['cmd'], key: 'e' }}
-              target={
-                <ManualEventForm
-                  initialEvent={event}
-                  onSubmit={(parsed) => onEdit(event.id, parsed)}
-                />
-              }
+              shortcut={{ modifiers: ["cmd"], key: "e" }}
+              target={<ManualEventForm initialEvent={event} onSubmit={(parsed) => onEdit(event.id, parsed)} />}
             />
             <Action.Push
-              title={event.label ? 'Edit Label' : 'Add Label'}
+              title={event.label ? "Edit Label" : "Add Label"}
               icon={Icon.Tag}
-              shortcut={{ modifiers: ['cmd'], key: 'l' }}
+              shortcut={{ modifiers: ["cmd"], key: "l" }}
               target={
                 <TextInputForm
                   title={`Label for ${extractTime(event.iso)}`}
                   fieldTitle="Label"
                   placeholder="e.g., api-gw, postgres, auth-service"
-                  initialValue={event.label ?? ''}
+                  initialValue={event.label ?? ""}
                   onSubmit={(label) => onRelabel(event.id, trimOrNull(label))}
                 />
               }
             />
             <Action.Push
-              title={event.url ? 'Edit URL' : 'Add URL'}
+              title={event.url ? "Edit URL" : "Add URL"}
               icon={Icon.Link}
-              shortcut={{ modifiers: ['cmd'], key: 'u' }}
+              shortcut={{ modifiers: ["cmd"], key: "u" }}
               target={
                 <TextInputForm
                   title={`URL for ${extractTime(event.iso)}`}
                   fieldTitle="URL"
                   placeholder="e.g., https://grafana.internal/d/abc123"
-                  initialValue={event.url ?? ''}
+                  initialValue={event.url ?? ""}
                   onSubmit={(url) => onSetUrl(event.id, trimOrNull(url))}
                 />
               }
@@ -106,7 +88,7 @@ export function EventRow({
             <Action.Push
               title="Edit Data"
               icon={Icon.Pencil}
-              shortcut={{ modifiers: ['cmd'], key: 'd' }}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
               target={
                 <TextInputForm
                   title={`Data for ${extractTime(event.iso)}`}
@@ -122,7 +104,7 @@ export function EventRow({
               <Action.OpenInBrowser
                 title="Open URL"
                 url={event.url}
-                shortcut={{ modifiers: ['cmd', 'shift'], key: 'u' }}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "u" }}
               />
             ) : null}
           </ActionPanel.Section>
@@ -140,17 +122,17 @@ export function EventRow({
             <Action.CopyToClipboard
               title="Copy Timeline as Markdown"
               content={timelineMarkdown}
-              shortcut={{ modifiers: ['cmd', 'shift'], key: 'm' }}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
             />
             <Action.CopyToClipboard
               title="Copy Timeline as JSON"
               content={timelineJson}
-              shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "j" }}
             />
             <Action.CopyToClipboard
               title="Copy Timeline as Csv"
               content={timelineCsv}
-              shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
             />
           </ActionPanel.Section>
           <NewEventSection onPin={onPin} />
@@ -160,7 +142,7 @@ export function EventRow({
               title="Delete Event"
               icon={Icon.Trash}
               style={Action.Style.Destructive}
-              shortcut={{ modifiers: ['ctrl'], key: 'delete' }}
+              shortcut={{ modifiers: ["ctrl"], key: "delete" }}
               onAction={() => {
                 void onRemove(event.id);
               }}
@@ -169,7 +151,7 @@ export function EventRow({
               title="Delete Session"
               icon={Icon.Trash}
               style={Action.Style.Destructive}
-              shortcut={{ modifiers: ['ctrl', 'shift'], key: 'delete' }}
+              shortcut={{ modifiers: ["ctrl", "shift"], key: "delete" }}
               onAction={() => {
                 void onDeleteSession();
               }}

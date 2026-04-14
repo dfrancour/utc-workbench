@@ -1,27 +1,11 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  confirmAlert,
-  Icon,
-  List,
-  showToast,
-  Toast,
-} from '@raycast/api';
-import { showFailureToast, useCachedState } from '@raycast/utils';
-import { useState, useEffect, useMemo } from 'react';
-import { DateTime } from 'luxon';
-import { extractTimestamps } from './lib/parser';
-import { reinterpret } from './lib/normalize';
-import { escapeCsvField, extractDate, formatDelta, trimOrNull } from './lib/format';
-import {
-  addEvent,
-  addEvents,
-  removeEvent,
-  replaceEventFields,
-  sortEvents,
-  updateEvent,
-} from './lib/store';
+import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast } from "@raycast/api";
+import { showFailureToast, useCachedState } from "@raycast/utils";
+import { useState, useEffect, useMemo } from "react";
+import { DateTime } from "luxon";
+import { extractTimestamps } from "./lib/parser";
+import { reinterpret } from "./lib/normalize";
+import { escapeCsvField, extractDate, formatDelta, trimOrNull } from "./lib/format";
+import { addEvent, addEvents, removeEvent, replaceEventFields, sortEvents, updateEvent } from "./lib/store";
 import {
   EMPTY_SESSION_STATE,
   SESSIONS_STORAGE_KEY,
@@ -29,14 +13,14 @@ import {
   createSession,
   getActiveSession,
   updateActiveSessionEvents,
-} from './lib/sessions';
-import { useSessionDelete } from './lib/use-session-delete';
-import type { Event, ParsedTimestamp } from './types';
-import { TextInputForm } from './components/TextInputForm';
-import { ManualEventForm } from './components/ManualEventForm';
-import { SessionPicker } from './components/SessionPicker';
-import { ParsedRow } from './components/ParsedRow';
-import { EventRow } from './components/EventRow';
+} from "./lib/sessions";
+import { useSessionDelete } from "./lib/use-session-delete";
+import type { Event, ParsedTimestamp } from "./types";
+import { TextInputForm } from "./components/TextInputForm";
+import { ManualEventForm } from "./components/ManualEventForm";
+import { SessionPicker } from "./components/SessionPicker";
+import { ParsedRow } from "./components/ParsedRow";
+import { EventRow } from "./components/EventRow";
 
 /**
  * Unified timestamp scratchpad + curated timeline.
@@ -93,7 +77,7 @@ export default function UTCWorkbench() {
     });
   }
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [parsed, setParsed] = useState<readonly ParsedTimestamp[]>([]);
   const [parsedTruncated, setParsedTruncated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -132,10 +116,10 @@ export default function UTCWorkbench() {
   }, []);
 
   const navTitle = useMemo(() => {
-    const utcTime = now.toFormat('HH:mm');
+    const utcTime = now.toFormat("HH:mm");
     const local = now.toLocal();
-    const clock = `UTC ${utcTime}  \u00B7  ${local.toFormat('ZZZZ')} ${local.toFormat('HH:mm')} (${local.toFormat('ZZ')})`;
-    const session = activeSession ? activeSession.label : 'No Session';
+    const clock = `UTC ${utcTime}  \u00B7  ${local.toFormat("ZZZZ")} ${local.toFormat("HH:mm")} (${local.toFormat("ZZ")})`;
+    const session = activeSession ? activeSession.label : "No Session";
     return `${clock}  \u00B7  ${session}`;
   }, [now, activeSession]);
 
@@ -212,19 +196,19 @@ export default function UTCWorkbench() {
 
   function handleSetReference(id: string) {
     setReferenceId(id);
-    void showToast({ style: Toast.Style.Success, title: 'Reference set' });
+    void showToast({ style: Toast.Style.Success, title: "Reference set" });
   }
 
   function handleClearReference() {
     setReferenceId(null);
-    void showToast({ style: Toast.Style.Success, title: 'Reference cleared' });
+    void showToast({ style: Toast.Style.Success, title: "Reference cleared" });
   }
 
   // Precondition: `events` is sorted by timestamp ascending, so same-date
   // entries are contiguous and can be grouped in a single pass.
   const eventsByDate = useMemo(() => {
     const groups: { date: string; events: Event[] }[] = [];
-    let currentDate = '';
+    let currentDate = "";
     let currentGroup: Event[] = [];
 
     for (const event of events) {
@@ -249,10 +233,10 @@ export default function UTCWorkbench() {
   async function handlePin(result: ParsedTimestamp) {
     try {
       mutateEvents((current) => addEvent(current, result, result.label, result.url));
-      setQuery('');
-      await showToast({ style: Toast.Style.Success, title: 'Pinned to timeline' });
+      setQuery("");
+      await showToast({ style: Toast.Style.Success, title: "Pinned to timeline" });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to pin event' });
+      await showFailureToast(error, { title: "Failed to pin event" });
     }
   }
 
@@ -261,22 +245,22 @@ export default function UTCWorkbench() {
     const count = parsed.length;
     try {
       mutateEvents((current) => addEvents(current, parsed, trimOrNull(label)));
-      setQuery('');
+      setQuery("");
       await showToast({
         style: Toast.Style.Success,
-        title: `Pinned ${count.toString()} timestamp${count === 1 ? '' : 's'}`,
+        title: `Pinned ${count.toString()} timestamp${count === 1 ? "" : "s"}`,
       });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to pin events' });
+      await showFailureToast(error, { title: "Failed to pin events" });
     }
   }
 
   async function handleEditEvent(id: string, parsed: ParsedTimestamp) {
     try {
       mutateEvents((current) => replaceEventFields(current, id, parsed));
-      await showToast({ style: Toast.Style.Success, title: 'Event updated' });
+      await showToast({ style: Toast.Style.Success, title: "Event updated" });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to update event' });
+      await showFailureToast(error, { title: "Failed to update event" });
     }
   }
 
@@ -284,7 +268,7 @@ export default function UTCWorkbench() {
     try {
       mutateEvents((current) => removeEvent(current, id));
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to delete event' });
+      await showFailureToast(error, { title: "Failed to delete event" });
     }
   }
 
@@ -292,7 +276,7 @@ export default function UTCWorkbench() {
     try {
       mutateEvents((current) => updateEvent(current, id, { label }));
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to update label' });
+      await showFailureToast(error, { title: "Failed to update label" });
     }
   }
 
@@ -300,7 +284,7 @@ export default function UTCWorkbench() {
     try {
       mutateEvents((current) => updateEvent(current, id, { url }));
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to update URL' });
+      await showFailureToast(error, { title: "Failed to update URL" });
     }
   }
 
@@ -311,7 +295,7 @@ export default function UTCWorkbench() {
     try {
       mutateEvents((current) => updateEvent(current, id, { data }));
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to update data' });
+      await showFailureToast(error, { title: "Failed to update data" });
     }
   }
 
@@ -320,7 +304,7 @@ export default function UTCWorkbench() {
     if (!trimmed) {
       await showToast({
         style: Toast.Style.Failure,
-        title: 'Session label required',
+        title: "Session label required",
       });
       return;
     }
@@ -331,7 +315,7 @@ export default function UTCWorkbench() {
         title: `Session "${trimmed}" created`,
       });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to create session' });
+      await showFailureToast(error, { title: "Failed to create session" });
     }
   }
 
@@ -346,10 +330,10 @@ export default function UTCWorkbench() {
       title: `Delete "${current.label}"?`,
       message:
         eventCount === 0
-          ? 'Delete this empty session?'
-          : `Permanently delete ${eventCount.toString()} event${eventCount === 1 ? '' : 's'} in this session.`,
+          ? "Delete this empty session?"
+          : `Permanently delete ${eventCount.toString()} event${eventCount === 1 ? "" : "s"} in this session.`,
       primaryAction: {
-        title: 'Delete Session',
+        title: "Delete Session",
         style: Alert.ActionStyle.Destructive,
       },
     });
@@ -362,7 +346,7 @@ export default function UTCWorkbench() {
         title: `Session "${current.label}" deleted`,
       });
     } catch (error) {
-      await showFailureToast(error, { title: 'Failed to delete session' });
+      await showFailureToast(error, { title: "Failed to delete session" });
     }
   }
 
@@ -370,19 +354,19 @@ export default function UTCWorkbench() {
   // CopyToClipboard actions inside every row — without memoization each row's
   // render eagerly rebuilds the whole timeline (O(N²) per paint).
   const timelineMarkdown = useMemo(() => {
-    if (events.length === 0) return '';
-    const header = '| UTC | Δ | Event | Link |\n| --- | --- | --- | --- |';
+    if (events.length === 0) return "";
+    const header = "| UTC | Δ | Event | Link |\n| --- | --- | --- | --- |";
     const rows = events.map((e, i) => {
       const prev = events[i - 1];
-      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '—';
-      const labelPrefix = e.label ? `[${e.label}] ` : '';
+      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : "—";
+      const labelPrefix = e.label ? `[${e.label}] ` : "";
       // Angle-bracket link form handles URLs containing parens without
       // requiring percent-encoding; pipes in URLs are vanishingly rare but
       // still escaped for table safety.
-      const link = e.url ? `[Link](<${e.url.replace(/\|/g, '%7C')}>)` : '';
+      const link = e.url ? `[Link](<${e.url.replace(/\|/g, "%7C")}>)` : "";
       return `| ${escapeMdCell(e.iso)} | ${delta} | ${escapeMdCell(labelPrefix + e.data)} | ${link} |`;
     });
-    return [header, ...rows].join('\n');
+    return [header, ...rows].join("\n");
   }, [events]);
 
   const timelineJson = useMemo(
@@ -392,7 +376,7 @@ export default function UTCWorkbench() {
           utc: e.iso,
           label: e.label,
           url: e.url,
-          data: e.data !== '' ? e.data : null,
+          data: e.data !== "" ? e.data : null,
         })),
         null,
         2
@@ -401,20 +385,20 @@ export default function UTCWorkbench() {
   );
 
   const timelineCsv = useMemo(() => {
-    if (events.length === 0) return '';
-    const header = 'UTC,Delta,Event,Link';
+    if (events.length === 0) return "";
+    const header = "UTC,Delta,Event,Link";
     const rows = events.map((e, i) => {
       const prev = events[i - 1];
-      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : '';
-      const labelPrefix = e.label ? `[${e.label}] ` : '';
+      const delta = prev ? formatDelta(e.timestamp - prev.timestamp) : "";
+      const labelPrefix = e.label ? `[${e.label}] ` : "";
       return [
         escapeCsvField(e.iso),
         escapeCsvField(delta),
         escapeCsvField(labelPrefix + e.data),
-        escapeCsvField(e.url || ''),
-      ].join(',');
+        escapeCsvField(e.url || ""),
+      ].join(",");
     });
-    return [header, ...rows].join('\n');
+    return [header, ...rows].join("\n");
   }, [events]);
 
   const hasParsed = parsed.length > 0;
@@ -429,13 +413,13 @@ export default function UTCWorkbench() {
       <Action.Push
         title="Sessions"
         icon={Icon.Folder}
-        shortcut={{ modifiers: ['cmd'], key: 's' }}
+        shortcut={{ modifiers: ["cmd"], key: "s" }}
         target={<SessionPicker />}
       />
       <Action.Push
         title="New Session"
         icon={Icon.PlusCircle}
-        shortcut={{ modifiers: ['cmd', 'shift'], key: 'n' }}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
         target={
           <TextInputForm
             title="New Session"
@@ -464,7 +448,7 @@ export default function UTCWorkbench() {
           <Action.Push
             title="New Manual Event"
             icon={Icon.PlusCircle}
-            shortcut={{ modifiers: ['cmd'], key: 'n' }}
+            shortcut={{ modifiers: ["cmd"], key: "n" }}
             target={<ManualEventForm onSubmit={handlePin} />}
           />
           {sessionSection}
@@ -473,17 +457,17 @@ export default function UTCWorkbench() {
               <Action.CopyToClipboard
                 title="Copy Timeline as Markdown"
                 content={timelineMarkdown}
-                shortcut={{ modifiers: ['cmd', 'shift'], key: 'm' }}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
               />
               <Action.CopyToClipboard
                 title="Copy Timeline as JSON"
                 content={timelineJson}
-                shortcut={{ modifiers: ['cmd', 'shift'], key: 'j' }}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "j" }}
               />
               <Action.CopyToClipboard
                 title="Copy Timeline as Csv"
                 content={timelineCsv}
-                shortcut={{ modifiers: ['cmd', 'shift'], key: 'c' }}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
               />
             </ActionPanel.Section>
           ) : null}
@@ -493,7 +477,7 @@ export default function UTCWorkbench() {
                 title="Delete Session"
                 icon={Icon.Trash}
                 style={Action.Style.Destructive}
-                shortcut={{ modifiers: ['ctrl', 'shift'], key: 'delete' }}
+                shortcut={{ modifiers: ["ctrl", "shift"], key: "delete" }}
                 onAction={() => {
                   void handleDeleteSession();
                 }}
@@ -537,7 +521,7 @@ export default function UTCWorkbench() {
         <List.Section
           key={group.date}
           title={`${group.date} UTC`}
-          subtitle={`${group.events.length.toString()} event${group.events.length === 1 ? '' : 's'}`}
+          subtitle={`${group.events.length.toString()} event${group.events.length === 1 ? "" : "s"}`}
         >
           {group.events.map((event) => {
             const itemId = `event-${event.id}`;
@@ -588,5 +572,5 @@ function hashString(value: string): string {
  * `<br>` since md tables can't span multiple lines natively.
  */
 function escapeMdCell(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
 }

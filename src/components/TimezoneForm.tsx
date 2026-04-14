@@ -1,22 +1,22 @@
-import { Action, ActionPanel, Form, Icon, useNavigation } from '@raycast/api';
+import { Action, ActionPanel, Form, Icon, useNavigation } from "@raycast/api";
 
 const COMMON_TIMEZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Toronto',
-  'America/Sao_Paulo',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Paris',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Kolkata',
-  'Asia/Singapore',
-  'Australia/Sydney',
-  'Pacific/Auckland',
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Berlin",
+  "Europe/Paris",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Australia/Sydney",
+  "Pacific/Auckland",
 ] as const;
 
 type TimezoneFormProps = {

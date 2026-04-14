@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon';
+import { DateTime } from "luxon";
 
 /**
  * Format a delta in milliseconds as a human-readable string.
@@ -6,7 +6,7 @@ import { DateTime } from 'luxon';
  */
 export function formatDelta(deltaMs: number): string {
   const abs = Math.abs(deltaMs);
-  const sign = deltaMs < 0 ? '-' : '+';
+  const sign = deltaMs < 0 ? "-" : "+";
 
   if (abs < 1000) {
     return `${sign}${abs.toString()}ms`;
@@ -39,8 +39,8 @@ type FormatRelativeOptions = {
  */
 export function formatRelative(epochMs: number, options?: FormatRelativeOptions): string {
   const now = DateTime.utc();
-  const then = DateTime.fromMillis(epochMs, { zone: 'utc' });
-  const totalSeconds = Math.abs(now.diff(then).as('seconds'));
+  const then = DateTime.fromMillis(epochMs, { zone: "utc" });
+  const totalSeconds = Math.abs(now.diff(then).as("seconds"));
   const isPast = now.toMillis() > epochMs;
 
   if (options?.coarse === true) {
@@ -49,7 +49,7 @@ export function formatRelative(epochMs: number, options?: FormatRelativeOptions)
       const label = `${days.toString()}d`;
       return isPast ? `${label} ago` : `in ${label}`;
     }
-    if (days === 1) return isPast ? 'yesterday' : 'tomorrow';
+    if (days === 1) return isPast ? "yesterday" : "tomorrow";
     const hours = Math.floor(totalSeconds / 3_600);
     if (hours >= 1) {
       const label = `${hours.toString()}h`;
@@ -60,7 +60,7 @@ export function formatRelative(epochMs: number, options?: FormatRelativeOptions)
       const label = `${minutes.toString()}m`;
       return isPast ? `${label} ago` : `in ${label}`;
     }
-    return 'just now';
+    return "just now";
   }
 
   if (totalSeconds < 60) {

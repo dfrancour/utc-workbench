@@ -1,11 +1,11 @@
-import { Action, ActionPanel, Color, Icon, List } from '@raycast/api';
-import { DateTime } from 'luxon';
-import { extractTime, trimOrNull } from '../lib/format';
-import type { ParsedTimestamp } from '../types';
-import { TextInputForm } from './TextInputForm';
-import { TimezoneForm } from './TimezoneForm';
-import { TimestampDetail } from './TimestampDetail';
-import { type BaseRowProps, CompareActions, NewEventSection } from './action-sections';
+import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
+import { DateTime } from "luxon";
+import { extractTime, trimOrNull } from "../lib/format";
+import type { ParsedTimestamp } from "../types";
+import { TextInputForm } from "./TextInputForm";
+import { TimezoneForm } from "./TimezoneForm";
+import { TimestampDetail } from "./TimestampDetail";
+import { type BaseRowProps, CompareActions, NewEventSection } from "./action-sections";
 
 type ParsedRowProps = BaseRowProps & {
   readonly result: ParsedTimestamp;
@@ -31,29 +31,18 @@ export function ParsedRow({
   onClearReference,
   sessionActions,
 }: ParsedRowProps) {
-  const subtitle = r.ambiguous ? 'No timezone — select one' : r.label;
+  const subtitle = r.ambiguous ? "No timezone — select one" : r.label;
   const isRef = referenceId === itemId;
 
   return (
     <List.Item
       id={itemId}
       icon={
-        isRef
-          ? { source: Icon.BullsEye, tintColor: Color.Blue }
-          : r.ambiguous
-            ? Icon.Warning
-            : Icon.MagnifyingGlass
+        isRef ? { source: Icon.BullsEye, tintColor: Color.Blue } : r.ambiguous ? Icon.Warning : Icon.MagnifyingGlass
       }
       title={r.iso}
       {...(subtitle !== null ? { subtitle } : {})}
-      detail={
-        <TimestampDetail
-          kind="parsed"
-          parsed={r}
-          offset={offset}
-          isReference={referenceId === itemId}
-        />
-      }
+      detail={<TimestampDetail kind="parsed" parsed={r} offset={offset} isReference={referenceId === itemId} />}
       actions={
         <ActionPanel>
           {r.ambiguous ? (
@@ -62,13 +51,13 @@ export function ParsedRow({
                 title="Interpret as Utc"
                 icon={Icon.Globe}
                 onAction={() => {
-                  onResolveTimezone(i, 'utc');
+                  onResolveTimezone(i, "utc");
                 }}
               />
               <Action
                 title="Interpret as Local"
                 icon={Icon.Clock}
-                shortcut={{ modifiers: ['cmd'], key: 'l' }}
+                shortcut={{ modifiers: ["cmd"], key: "l" }}
                 onAction={() => {
                   onResolveTimezone(i, DateTime.local().zoneName);
                 }}
@@ -76,7 +65,7 @@ export function ParsedRow({
               <Action.Push
                 title="Select Timezone"
                 icon={Icon.Globe}
-                shortcut={{ modifiers: ['cmd'], key: 't' }}
+                shortcut={{ modifiers: ["cmd"], key: "t" }}
                 target={
                   <TimezoneForm
                     title={`Timezone for ${extractTime(r.iso)}`}
@@ -101,7 +90,7 @@ export function ParsedRow({
                 <Action
                   title="Pin All"
                   icon={Icon.PlusCircle}
-                  shortcut={{ modifiers: ['cmd', 'shift'], key: 'return' }}
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "return" }}
                   onAction={() => {
                     void onPinAll();
                   }}
@@ -109,7 +98,7 @@ export function ParsedRow({
                 <Action.Push
                   title="Pin All with Label"
                   icon={Icon.Tag}
-                  shortcut={{ modifiers: ['cmd', 'shift'], key: 'l' }}
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "l" }}
                   target={
                     <TextInputForm
                       title={`Label for ${parsedCount.toString()} timestamps`}
@@ -130,15 +119,15 @@ export function ParsedRow({
           />
           <ActionPanel.Section title="Metadata">
             <Action.Push
-              title={r.label ? 'Edit Label' : 'Add Label'}
+              title={r.label ? "Edit Label" : "Add Label"}
               icon={Icon.Tag}
-              shortcut={{ modifiers: ['cmd'], key: 'l' }}
+              shortcut={{ modifiers: ["cmd"], key: "l" }}
               target={
                 <TextInputForm
                   title={`Label for ${extractTime(r.iso)}`}
                   fieldTitle="Label"
                   placeholder="e.g., api-gw, postgres, auth-service"
-                  initialValue={r.label ?? ''}
+                  initialValue={r.label ?? ""}
                   onSubmit={(label) => {
                     onUpdateParsed(i, { label: trimOrNull(label) });
                   }}
@@ -146,15 +135,15 @@ export function ParsedRow({
               }
             />
             <Action.Push
-              title={r.url ? 'Edit URL' : 'Add URL'}
+              title={r.url ? "Edit URL" : "Add URL"}
               icon={Icon.Link}
-              shortcut={{ modifiers: ['cmd'], key: 'u' }}
+              shortcut={{ modifiers: ["cmd"], key: "u" }}
               target={
                 <TextInputForm
                   title={`URL for ${extractTime(r.iso)}`}
                   fieldTitle="URL"
                   placeholder="e.g., https://grafana.internal/d/abc123"
-                  initialValue={r.url ?? ''}
+                  initialValue={r.url ?? ""}
                   onSubmit={(url) => {
                     onUpdateParsed(i, { url: trimOrNull(url) });
                   }}
@@ -164,7 +153,7 @@ export function ParsedRow({
             <Action.Push
               title="Edit Data"
               icon={Icon.Pencil}
-              shortcut={{ modifiers: ['cmd'], key: 'd' }}
+              shortcut={{ modifiers: ["cmd"], key: "d" }}
               target={
                 <TextInputForm
                   title={`Data for ${extractTime(r.iso)}`}
