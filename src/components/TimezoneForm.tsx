@@ -1,23 +1,12 @@
 import { Action, ActionPanel, Form, Icon, useNavigation } from "@raycast/api";
+import { DateTime } from "luxon";
 
-const COMMON_TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Berlin",
-  "Europe/Paris",
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-] as const;
+function formatZoneLabel(tz: string): string {
+  const dt = DateTime.now().setZone(tz);
+  return `${tz} (${dt.toFormat("ZZZZ")})`;
+}
+
+const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
 type TimezoneFormProps = {
   readonly title: string;
@@ -44,8 +33,8 @@ export function TimezoneForm({ title, onSubmit }: TimezoneFormProps) {
       }
     >
       <Form.Dropdown id="timezone" title="Timezone" defaultValue="UTC">
-        {COMMON_TIMEZONES.map((tz) => (
-          <Form.Dropdown.Item key={tz} value={tz} title={tz} />
+        {TIMEZONES.map((tz) => (
+          <Form.Dropdown.Item key={tz} value={tz} title={formatZoneLabel(tz)} />
         ))}
       </Form.Dropdown>
     </Form>
