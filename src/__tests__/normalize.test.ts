@@ -18,6 +18,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: null,
       url: null,
+      source: "",
+      format: "Test",
     };
 
     // Reinterpret as America/New_York (EDT, UTC-4 on this date)
@@ -33,6 +35,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: null,
       url: null,
+      source: "",
+      format: "Test",
     };
     const result = reinterpret(original, "utc");
     expect(result.iso).toBe(original.iso);
@@ -46,6 +50,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: null,
       url: null,
+      source: "",
+      format: "Test",
     };
     const result = reinterpret(original, "America/Los_Angeles");
     expect(result.data).toBe("original log line");
@@ -57,6 +63,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: "api",
       url: "https://example.com",
+      source: "",
+      format: "Test",
     };
     const result = reinterpret(original, "Not/A_Zone");
     expect(result).toBe(original);
@@ -68,6 +76,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: "api-gw",
       url: "https://grafana.internal/d/abc",
+      source: "",
+      format: "Test",
     };
     const result = reinterpret(original, "America/Los_Angeles");
     expect(result.label).toBe("api-gw");
@@ -83,6 +93,8 @@ describe("reinterpret", () => {
       ambiguous: true,
       label: null,
       url: null,
+      source: "",
+      format: "Test",
     };
     const step1 = reinterpret(step0, "utc");
     expect(step1.iso).toBe("2026-07-15T12:00:00.000Z");
@@ -98,14 +110,14 @@ describe("reinterpret", () => {
     // New York should add 5h in winter, 4h in summer.
     const winterUtc = Date.UTC(2026, 0, 15, 12, 0, 0);
     const winter = reinterpret(
-      { ...normalize(winterUtc, "w"), ambiguous: true, label: null, url: null },
+      { ...normalize(winterUtc, "w"), ambiguous: true, label: null, url: null, source: "", format: "Test" },
       "America/New_York"
     );
     expect(winter.iso).toBe("2026-01-15T17:00:00.000Z");
 
     const summerUtc = Date.UTC(2026, 6, 15, 12, 0, 0);
     const summer = reinterpret(
-      { ...normalize(summerUtc, "s"), ambiguous: true, label: null, url: null },
+      { ...normalize(summerUtc, "s"), ambiguous: true, label: null, url: null, source: "", format: "Test" },
       "America/New_York"
     );
     expect(summer.iso).toBe("2026-07-15T16:00:00.000Z");

@@ -50,4 +50,6 @@ export type ParsedTimestamp = {
   readonly ambiguous: boolean; // true if no timezone was specified in the source
   readonly label: string | null; // user-assigned label, editable before pinning
   readonly url: string | null; // user-assigned URL, editable before pinning
+  readonly source: string; // the exact substring that matched (e.g., "682622673b5180d9ee419e13")
+  readonly format: string; // human-readable format name (e.g., "MongoDB ObjectID", "ISO8601")
 };

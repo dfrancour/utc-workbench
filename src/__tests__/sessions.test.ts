@@ -36,6 +36,8 @@ function parsed(timestamp: number, data = "line"): ParsedTimestamp {
     ambiguous: false,
     label: null,
     url: null,
+    source: "",
+    format: "Test",
   };
 }
 

@@ -5,7 +5,10 @@ import type { ParsedTimestamp } from "../types";
  * Normalize an epoch-ms value into a canonical ParsedTimestamp.
  * Does not set `ambiguous`, `label`, or `url` — callers must set those.
  */
-export function normalize(epochMs: number, data: string): Omit<ParsedTimestamp, "ambiguous" | "label" | "url"> {
+export function normalize(
+  epochMs: number,
+  data: string
+): Omit<ParsedTimestamp, "ambiguous" | "label" | "url" | "source" | "format"> {
   const dt = DateTime.fromMillis(epochMs, { zone: "utc" });
 
   return {
@@ -45,5 +48,7 @@ export function reinterpret(parsed: ParsedTimestamp, zone: string): ParsedTimest
     ambiguous: false,
     label: parsed.label,
     url: parsed.url,
+    source: parsed.source,
+    format: parsed.format,
   };
 }

@@ -135,6 +135,8 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
                 ambiguous: false,
                 label: trimOrNull(values.label),
                 url: trimOrNull(values.url),
+                source: "",
+                format: "Manual",
               };
               await onSubmit(parsed);
               pop();

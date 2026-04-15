@@ -40,6 +40,17 @@ export function TimestampDetail(props: TimestampDetailProps) {
     <List.Item.Detail
       metadata={
         <List.Item.Detail.Metadata>
+          {props.kind === "parsed" ? (
+            <>
+              {props.parsed.source ? (
+                <List.Item.Detail.Metadata.Label title="Detected Date String" text={props.parsed.source} />
+              ) : null}
+              <List.Item.Detail.Metadata.TagList title="Format">
+                <List.Item.Detail.Metadata.TagList.Item text={props.parsed.format} color={Color.SecondaryText} />
+              </List.Item.Detail.Metadata.TagList>
+              <List.Item.Detail.Metadata.Separator />
+            </>
+          ) : null}
           {ambiguous ? (
             <>
               <List.Item.Detail.Metadata.TagList title="Timezone">

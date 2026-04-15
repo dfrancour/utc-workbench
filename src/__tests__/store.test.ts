@@ -20,6 +20,8 @@ function parsed(timestamp: number, data = "raw"): ParsedTimestamp {
     ambiguous: false,
     label: null,
     url: null,
+    source: "",
+    format: "Test",
   };
 }
 
@@ -154,6 +156,8 @@ describe("replaceEventFields", () => {
       ambiguous: false,
       label: "new-label",
       url: "https://new",
+      source: "",
+      format: "Test",
     };
     const result = replaceEventFields([original], original.id, next);
     expect(result[0]?.id).toBe(original.id);
