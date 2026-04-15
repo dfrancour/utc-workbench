@@ -311,6 +311,38 @@ describe("parseSingle", () => {
     expect(parseSingle("000000013b5180d9ee419e13")).toBeNull();
   });
 
+  it("parses UUID v7", () => {
+    // 019644d1-b2a0 hex = 1747329640096 ms = 2025-05-15T17:20:40.096Z
+    const result = parseSingle("019644d1-b2a0-7f3a-8b4c-5e1d2a3b4c5d");
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(0x019644d1b2a0);
+    expect(result!.ambiguous).toBe(false);
+    expect(result!.format).toBe("UUID v7");
+  });
+
+  it("parses UUID v7 embedded in a log line", () => {
+    const result = parseSingle("trace_id=019644d1-b2a0-7f3a-8b4c-5e1d2a3b4c5d span=42");
+    expect(result).not.toBeNull();
+    expect(result!.source).toBe("019644d1-b2a0-7f3a-8b4c-5e1d2a3b4c5d");
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it("parses UUID v7 case-insensitively", () => {
+    const result = parseSingle("019644D1-B2A0-7F3A-8B4C-5E1D2A3B4C5D");
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(0x019644d1b2a0);
+  });
+
+  it("rejects UUIDs that are not version 7", () => {
+    // Version 4 UUID — version nibble is 4, not 7
+    expect(parseSingle("550e8400-e29b-41d4-a716-446655440000")).toBeNull();
+  });
+
+  it("rejects UUID v7 with out-of-range timestamp", () => {
+    // Timestamp = 0x000000000000 → epoch 0 → before year 2000
+    expect(parseSingle("00000000-0000-7000-8000-000000000000")).toBeNull();
+  });
+
   it("parses RFC5424 syslog (ISO with fractional seconds + zone)", () => {
     const result = parseSingle("2026-04-03T15:20:50.123456Z host app - - - message");
     expect(result).not.toBeNull();
@@ -381,16 +413,17 @@ describe("extractTimestamps", () => {
     expect(timestamps[0]!.ambiguous).toBe(false);
   });
 
-  it("extracts a mix of formats from one input including ObjectID", () => {
+  it("extracts a mix of formats from one input including ObjectID and UUID v7", () => {
     const input = [
       "2026-04-04T18:02:31Z first",
       "Apr 3, 2026, 3:20 PM calendar entry",
       "2026/04/05 09:15:00 slash format",
       "1712253751 epoch",
       "inserted 682622673b5180d9ee419e13 into collection",
+      "trace 019644d1-b2a0-7f3a-8b4c-5e1d2a3b4c5d",
     ].join("\n");
     const { timestamps } = extractTimestamps(input);
-    expect(timestamps).toHaveLength(5);
+    expect(timestamps).toHaveLength(6);
     // Results are returned pattern-by-pattern, not in source order.
     const isos = timestamps.map((r) => r.iso).sort();
     expect(isos).toContain("2026-04-04T18:02:31.000Z");
@@ -398,5 +431,8 @@ describe("extractTimestamps", () => {
     expect(isos).toContain("2026-04-05T09:15:00.000Z");
     expect(isos).toContain("2024-04-04T18:02:31.000Z"); // 1712253751 → 2024-04-04
     expect(isos).toContain("2025-05-15T17:20:39.000Z"); // ObjectID 68262267...
+    // UUID v7: 0x019644d1b2a0 ms
+    const uuidMs = 0x019644d1b2a0;
+    expect(isos).toContain(new Date(uuidMs).toISOString().replace(/(\.\d{3})\d*Z$/, "$1Z"));
   });
 });

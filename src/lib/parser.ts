@@ -285,6 +285,30 @@ const PATTERNS: readonly {
     },
   },
 
+  // UUID v7 (RFC 9562): the first 48 bits encode a Unix timestamp in
+  // milliseconds. In the canonical string form `xxxxxxxx-xxxx-7xxx-yxxx-…`
+  // that's the 12 hex digits before the version nibble. The version field
+  // (`7`) and variant bits (`8`/`9`/`a`/`b`) are validated structurally.
+  // Always UTC, never ambiguous.
+  //
+  // Placed after MongoDB ObjectID so 24-char hex strings are tried first
+  // (a UUID is 36 chars with dashes — no collision risk) and before
+  // syslog/month-name patterns which can't produce hex.
+  {
+    name: "UUID v7",
+    regex: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b/g,
+    parse: (match) => {
+      // First 48 bits = first 8 hex chars + next 4 hex chars (positions 9-12).
+      const msHex = match.slice(0, 8) + match.slice(9, 13);
+      const epochMs = parseInt(msHex, 16);
+
+      // Sanity: reject if outside 2000-01-01 .. 2100-01-01
+      if (epochMs < 946684800000 || epochMs > 4102444800000) return null;
+
+      return { epochMs, ambiguous: false };
+    },
+  },
+
   // Syslog RFC3164: `Apr  3 15:20:50` (no year, no timezone). Single-digit
   // days are space-padded per spec ("Apr  3" with two spaces), but we accept
   // one-or-more whitespace to be lenient. Doubly ambiguous: missing year is
