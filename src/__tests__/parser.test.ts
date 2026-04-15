@@ -283,6 +283,34 @@ describe("parseSingle", () => {
     expect(result!.ambiguous).toBe(false);
   });
 
+  it("parses MongoDB ObjectID", () => {
+    // 68262267 hex = 1747329639 seconds = 2025-05-15T17:20:39Z
+    const result = parseSingle("682622673b5180d9ee419e13");
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(1747329639000);
+    expect(result!.iso).toBe("2025-05-15T17:20:39.000Z");
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it("parses MongoDB ObjectID embedded in a log line", () => {
+    const result = parseSingle('db.collection.find({ _id: ObjectId("682622673b5180d9ee419e13") })');
+    expect(result).not.toBeNull();
+    expect(result!.iso).toBe("2025-05-15T17:20:39.000Z");
+    expect(result!.ambiguous).toBe(false);
+  });
+
+  it("rejects hex strings that are not 24 characters", () => {
+    // 23 chars — too short
+    expect(parseSingle("682622673b5180d9ee419e1")).toBeNull();
+    // 25 chars — too long
+    expect(parseSingle("682622673b5180d9ee419e130")).toBeNull();
+  });
+
+  it("rejects ObjectID-shaped hex with out-of-range timestamp", () => {
+    // First 8 hex chars = 00000001 → epoch 1 (year 1970) — before 2000 cutoff
+    expect(parseSingle("000000013b5180d9ee419e13")).toBeNull();
+  });
+
   it("parses RFC5424 syslog (ISO with fractional seconds + zone)", () => {
     const result = parseSingle("2026-04-03T15:20:50.123456Z host app - - - message");
     expect(result).not.toBeNull();
@@ -353,20 +381,22 @@ describe("extractTimestamps", () => {
     expect(timestamps[0]!.ambiguous).toBe(false);
   });
 
-  it("extracts a mix of formats from one input", () => {
+  it("extracts a mix of formats from one input including ObjectID", () => {
     const input = [
       "2026-04-04T18:02:31Z first",
       "Apr 3, 2026, 3:20 PM calendar entry",
       "2026/04/05 09:15:00 slash format",
       "1712253751 epoch",
+      "inserted 682622673b5180d9ee419e13 into collection",
     ].join("\n");
     const { timestamps } = extractTimestamps(input);
-    expect(timestamps).toHaveLength(4);
+    expect(timestamps).toHaveLength(5);
     // Results are returned pattern-by-pattern, not in source order.
     const isos = timestamps.map((r) => r.iso).sort();
     expect(isos).toContain("2026-04-04T18:02:31.000Z");
     expect(isos).toContain("2026-04-03T15:20:00.000Z");
     expect(isos).toContain("2026-04-05T09:15:00.000Z");
     expect(isos).toContain("2024-04-04T18:02:31.000Z"); // 1712253751 → 2024-04-04
+    expect(isos).toContain("2025-05-15T17:20:39.000Z"); // ObjectID 68262267...
   });
 });

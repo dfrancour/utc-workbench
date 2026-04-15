@@ -257,6 +257,26 @@ const PATTERNS: readonly {
     },
   },
 
+  // MongoDB ObjectID: 24-character hex string where the first 4 bytes (8 hex
+  // chars) encode a Unix timestamp in seconds. Always UTC, never ambiguous.
+  //
+  // Placed after the epoch pattern so pure-digit strings are handled there,
+  // and before syslog/month-name patterns which can't produce hex. A range
+  // check (year 2000–2100) reduces false positives from arbitrary 24-char
+  // hex strings (e.g. truncated SHA hashes).
+  {
+    regex: /\b[0-9a-fA-F]{24}\b/g,
+    parse: (match) => {
+      const timestampHex = match.slice(0, 8);
+      const epochSeconds = parseInt(timestampHex, 16);
+
+      // Sanity: reject if outside 2000-01-01 .. 2100-01-01
+      if (epochSeconds < 946684800 || epochSeconds > 4102444800) return null;
+
+      return { epochMs: epochSeconds * 1000, ambiguous: false };
+    },
+  },
+
   // Syslog RFC3164: `Apr  3 15:20:50` (no year, no timezone). Single-digit
   // days are space-padded per spec ("Apr  3" with two spaces), but we accept
   // one-or-more whitespace to be lenient. Doubly ambiguous: missing year is
