@@ -13,6 +13,7 @@ type ManualEventFormProps = {
   readonly initialEvent?: Event;
 };
 
+type InputMode = "precise" | "quick";
 type ZoneMode = "local" | "utc";
 
 type TimeParts = {
@@ -78,6 +79,11 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
 
   const isEdit = initialEvent !== undefined;
 
+  // Edit mode always uses precise input — the user needs exact control.
+  const [inputMode, setInputMode] = useState<InputMode>("precise");
+
+  // --- Precise mode state ---
+
   // Edit mode seeds from the event's canonical UTC representation. The date
   // picker expects a local-midnight Date, so we build one from the UTC Y/M/D
   // of the event. Default zone mode is UTC because the stored iso *is* UTC —
@@ -103,8 +109,18 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
   const [zoneMode, setZoneMode] = useState<ZoneMode>(isEdit ? "utc" : "local");
   const [timeError, setTimeError] = useState<string | undefined>(undefined);
 
+  // --- Quick mode state ---
+
+  const [quickDate, setQuickDate] = useState<Date | null>(
+    initialEvent !== undefined ? new Date(initialEvent.timestamp) : null
+  );
+
+  // --- Derived epoch ---
+
   const parsedTime = parseTimeString(timeText);
-  const epochMs = parsedTime !== null ? combineDateAndTime(pickedDate, parsedTime, zoneMode) : null;
+  const preciseEpochMs = parsedTime !== null ? combineDateAndTime(pickedDate, parsedTime, zoneMode) : null;
+  const quickEpochMs = quickDate !== null ? quickDate.getTime() : null;
+  const epochMs = inputMode === "quick" ? quickEpochMs : preciseEpochMs;
 
   const utcText =
     epochMs !== null ? DateTime.fromMillis(epochMs, { zone: "utc" }).toFormat("yyyy-MM-dd HH:mm:ss 'UTC'") : EMPTY_DASH;
@@ -122,12 +138,12 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
             title={isEdit ? "Save Changes" : "Pin to Timeline"}
             icon={isEdit ? Icon.Check : Icon.Pin}
             onSubmit={async (values: { label?: string; url?: string; data?: string }) => {
-              if (parsedTime === null) {
+              if (inputMode === "precise" && parsedTime === null) {
                 setTimeError("Invalid time (try HH:mm:ss or h:mm AM/PM)");
                 return;
               }
               if (epochMs === null) {
-                setTimeError("Could not combine date and time");
+                if (inputMode === "precise") setTimeError("Could not combine date and time");
                 return;
               }
               const parsed: ParsedTimestamp = {
@@ -145,37 +161,60 @@ export function ManualEventForm({ onSubmit, initialEvent }: ManualEventFormProps
         </ActionPanel>
       }
     >
-      <Form.DatePicker
-        id="date"
-        title="Date"
-        type={Form.DatePicker.Type.Date}
-        value={pickedDate}
-        onChange={(v) => {
-          if (v !== null) setPickedDate(v);
-        }}
-      />
-      <Form.TextField
-        id="time"
-        title="Time"
-        placeholder="HH:mm:ss (e.g. 15:20:50)"
-        value={timeText}
-        {...(timeError !== undefined ? { error: timeError } : {})}
-        onChange={(v) => {
-          setTimeText(v);
-          if (timeError !== undefined) setTimeError(undefined);
-        }}
-      />
-      <Form.Dropdown
-        id="zone"
-        title="Interpret As"
-        value={zoneMode}
-        onChange={(v) => {
-          setZoneMode(v === "utc" ? "utc" : "local");
-        }}
-      >
-        <Form.Dropdown.Item value="local" title="Local" icon={Icon.Clock} />
-        <Form.Dropdown.Item value="utc" title="UTC" icon={Icon.Globe} />
-      </Form.Dropdown>
+      {!isEdit && (
+        <Form.Dropdown
+          id="inputMode"
+          title="Input Mode"
+          value={inputMode}
+          onChange={(v) => setInputMode(v === "quick" ? "quick" : "precise")}
+        >
+          <Form.Dropdown.Item value="precise" title="Precise" icon={Icon.Clock} />
+          <Form.Dropdown.Item value="quick" title="Quick" icon={Icon.Wand} />
+        </Form.Dropdown>
+      )}
+      {inputMode === "quick" && !isEdit ? (
+        <Form.DatePicker
+          id="quickDateTime"
+          title="Date & Time"
+          type={Form.DatePicker.Type.DateTime}
+          value={quickDate}
+          onChange={setQuickDate}
+        />
+      ) : (
+        <>
+          <Form.DatePicker
+            id="date"
+            title="Date"
+            type={Form.DatePicker.Type.Date}
+            value={pickedDate}
+            onChange={(v) => {
+              if (v !== null) setPickedDate(v);
+            }}
+          />
+          <Form.TextField
+            id="time"
+            title="Time"
+            placeholder="HH:mm:ss (e.g. 15:20:50)"
+            value={timeText}
+            {...(timeError !== undefined ? { error: timeError } : {})}
+            onChange={(v) => {
+              setTimeText(v);
+              if (timeError !== undefined) setTimeError(undefined);
+            }}
+          />
+          <Form.Dropdown
+            id="zone"
+            title="Interpret As"
+            value={zoneMode}
+            onChange={(v) => {
+              setZoneMode(v === "utc" ? "utc" : "local");
+            }}
+          >
+            <Form.Dropdown.Item value="local" title="Local" icon={Icon.Clock} />
+            <Form.Dropdown.Item value="utc" title="UTC" icon={Icon.Globe} />
+          </Form.Dropdown>
+        </>
+      )}
       <Form.Description title="UTC" text={utcText} />
       <Form.Description title="Local" text={localText} />
       <Form.Separator />
