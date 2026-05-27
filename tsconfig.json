@@ -32,6 +32,7 @@
     "allowUnreachableCode": false,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    "types": ["node"],
 
     /* Completeness */
     "skipLibCheck": true

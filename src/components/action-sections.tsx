@@ -14,7 +14,7 @@ export type BaseRowProps = {
   readonly onSetReference: (id: string) => void;
   readonly onClearReference: () => void;
   readonly onPin: (result: ParsedTimestamp) => Promise<void> | void;
-  readonly sessionActions: React.ReactNode;
+  readonly sessionActions: Parameters<typeof ActionPanel>[0]["children"];
 };
 
 export function CompareActions({
