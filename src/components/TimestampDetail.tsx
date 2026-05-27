@@ -56,7 +56,7 @@ export function TimestampDetail(props: TimestampDetailProps) {
               <List.Item.Detail.Metadata.TagList title="Timezone">
                 <List.Item.Detail.Metadata.TagList.Item text="Required — select a zone" color={Color.Orange} />
               </List.Item.Detail.Metadata.TagList>
-              <List.Item.Detail.Metadata.Label title="Interpret as" text="↩ UTC      ⌘L Local      ⌘T Pick zone" />
+              <List.Item.Detail.Metadata.Label title="Interpret as" text="↩ UTC      ⌘T Local      ⌘⇧T Pick zone" />
               <List.Item.Detail.Metadata.Separator />
               <List.Item.Detail.Metadata.Label title="UTC" text={`${base.iso}  (tentative)`} />
               <List.Item.Detail.Metadata.Label title="Local" text={`${base.local}  (tentative)`} />
